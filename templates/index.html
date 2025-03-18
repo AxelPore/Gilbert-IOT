@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MIDI to String List Converter</title>
+    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+    <style>
+        .drop-zone {
+            border: 2px dashed #cbd5e0;
+            transition: all 0.3s ease;
+        }
+        .drop-zone:hover {
+            border-color: #4299e1;
+            background-color: #ebf8ff;
+        }
+        .drop-zone.dragover {
+            border-color: #4299e1;
+            background-color: #ebf8ff;
+        }
+    </style>
+</head>
+<body class="bg-gray-100 min-h-screen">
+    <div class="container mx-auto px-4 py-8">
+        <h1 class="text-4xl font-bold text-center text-gray-800 mb-8">MIDI to String List Converter</h1>
+        
+        <div class="max-w-2xl mx-auto bg-white rounded-lg shadow-md p-6">
+            <div class="drop-zone rounded-lg p-8 text-center mb-6" id="dropZone">
+                <input type="file" id="fileInput" class="hidden" accept=".mid">
+                <div class="space-y-4">
+                    <svg class="mx-auto h-12 w-12 text-gray-400" stroke="currentColor" fill="none" viewBox="0 0 48 48">
+                        <path d="M28 8H12a4 4 0 00-4 4v20m32-12v8m0 0v8a4 4 0 01-4 4H12a4 4 0 01-4-4v-4m32-4l-3.172-3.172a4 4 0 00-5.656 0L28 28M8 32l9.172-9.172a4 4 0 015.656 0L28 28m0 0l4 4m4-24h8m-4-4v8m-12 4h.02" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+                    </svg>
+                    <div class="text-gray-600">
+                        <label for="fileInput" class="cursor-pointer">
+                            <span class="text-blue-500 hover:text-blue-600">Click to upload</span> or drag and drop
+                        </label>
+                        <p class="text-sm mt-1">MIDI files only (.mid)</p>
+                    </div>
+                </div>
+            </div>
+
+            <div id="result" class="hidden">
+                <h2 class="text-xl font-semibold mb-4">MIDI Notes:</h2>
+                <div id="notesList" class="bg-gray-50 rounded-lg p-4 max-h-96 overflow-y-auto"></div>
+            </div>
+
+            <div id="error" class="hidden text-red-500 mt-4"></div>
+        </div>
+    </div>
+
+    <script>
+        const dropZone = document.getElementById('dropZone');
+        const fileInput = document.getElementById('fileInput');
+        const result = document.getElementById('result');
+        const notesList = document.getElementById('notesList');
+        const error = document.getElementById('error');
+
+        // Drag and drop handlers
+        ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+            dropZone.addEventListener(eventName, preventDefaults, false);
+        });
+
+        function preventDefaults(e) {
+            e.preventDefault();
+            e.stopPropagation();
+        }
+
+        ['dragenter', 'dragover'].forEach(eventName => {
+            dropZone.addEventListener(eventName, highlight, false);
+        });
+
+        ['dragleave', 'drop'].forEach(eventName => {
+            dropZone.addEventListener(eventName, unhighlight, false);
+        });
+
+        function highlight(e) {
+            dropZone.classList.add('dragover');
+        }
+
+        function unhighlight(e) {
+            dropZone.classList.remove('dragover');
+        }
+
+        dropZone.addEventListener('drop', handleDrop, false);
+
+        function handleDrop(e) {
+            const dt = e.dataTransfer;
+            const files = dt.files;
+            handleFiles(files);
+        }
+
+        fileInput.addEventListener('change', function(e) {
+            handleFiles(this.files);
+        });
+
+        function handleFiles(files) {
+            if (files.length > 0) {
+                const file = files[0];
+                if (file.name.endsWith('.mid')) {
+                    uploadFile(file);
+                } else {
+                    showError('Please upload a .mid file');
+                }
+            }
+        }
+
+        function uploadFile(file) {
+            const formData = new FormData();
+            formData.append('file', file);
+
+            fetch('/upload', {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.error) {
+                    showError(data.error);
+                } else {
+                    showNotes(data.notes);
+                }
+            })
+            .catch(err => {
+                showError('An error occurred while processing the file');
+            });
+        }
+
+        function showNotes(notes) {
+            error.classList.add('hidden');
+            result.classList.remove('hidden');
+            notesList.innerHTML = notes.map(note => `<div class="py-1">${note}</div>`).join('');
+        }
+
+        function showError(message) {
+            result.classList.add('hidden');
+            error.classList.remove('hidden');
+            error.textContent = message;
+        }
+    </script>
+</body>
+</html> 
