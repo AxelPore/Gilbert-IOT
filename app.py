@@ -162,15 +162,23 @@ def upload_file():
             mid = mido.MidiFile(filepath)
             
             try:
+                # Get file information before processing
+                file_info = {
+                    'name': filename,
+                    'size': os.path.getsize(filepath),
+                    'duration': sum(msg.time for msg in mid.tracks[0]) if mid.tracks else 0
+                }
+                
+                # Process the MIDI file
                 notes = midi_to_string_list(filepath)
-                os.remove(filepath)  # Clean up the uploaded file
+                
+                # Clean up the uploaded file
+                if os.path.exists(filepath):
+                    os.remove(filepath)
+                
                 return jsonify({
                     'notes': notes,
-                    'file_info': {
-                        'name': filename,
-                        'size': os.path.getsize(filepath),
-                        'duration': sum(msg.time for msg in mid.tracks[0]) if mid.tracks else 0
-                    }
+                    'file_info': file_info
                 })
             except Exception as e:
                 if os.path.exists(filepath):
