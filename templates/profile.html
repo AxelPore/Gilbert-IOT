@@ -135,6 +135,17 @@
                                             Convert
                                         </button>
                                         {% endif %}
+                                        {% if song.is_shared %}
+                                        <button onclick="unshareSong('{{ song.id }}')" 
+                                                class="px-3 py-1 bg-yellow-600 hover:bg-yellow-700 text-white rounded-md transition-colors [text-shadow:_0_2px_4px_rgb(0_0_0_/_1)]">
+                                            Unshare
+                                        </button>
+                                        {% else %}
+                                        <button onclick="shareSong('{{ song.id }}')" 
+                                                class="px-3 py-1 bg-purple-600 hover:bg-purple-700 text-white rounded-md transition-colors [text-shadow:_0_2px_4px_rgb(0_0_0_/_1)]">
+                                            Share
+                                        </button>
+                                        {% endif %}
                                         <button onclick="deleteSong('{{ song.id }}')" 
                                                 class="px-3 py-1 bg-red-600 hover:bg-red-700 text-white rounded-md transition-colors [text-shadow:_0_2px_4px_rgb(0_0_0_/_1)]">
                                             Delete
@@ -476,6 +487,46 @@ function viewResults(songId) {
             console.error('Error fetching results:', error);
             alert('Error fetching results: ' + error.message);
         });
+}
+
+function shareSong(songId) {
+    if (confirm('Are you sure you want to share this song with the community?')) {
+        fetch(`/share_song/${songId}`, {
+            method: 'POST'
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                location.reload();
+            } else {
+                alert('Error sharing song: ' + data.error);
+            }
+        })
+        .catch(error => {
+            console.error('Error sharing song:', error);
+            alert('Error sharing song. Please try again.');
+        });
+    }
+}
+
+function unshareSong(songId) {
+    if (confirm('Are you sure you want to unshare this song?')) {
+        fetch(`/unshare_song/${songId}`, {
+            method: 'POST'
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                location.reload();
+            } else {
+                alert('Error unsharing song: ' + data.error);
+            }
+        })
+        .catch(error => {
+            console.error('Error unsharing song:', error);
+            alert('Error unsharing song. Please try again.');
+        });
+    }
 }
 </script>
 {% endblock %} 

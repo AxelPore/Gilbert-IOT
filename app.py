@@ -24,6 +24,7 @@ os.makedirs(app.config['PROFILE_PICTURES_FOLDER'], exist_ok=True)
 
 # User data storage
 USERS_FILE = 'users.json'
+SHARED_SONGS_FILE = 'shared_songs.json'
 
 def load_users():
     if os.path.exists(USERS_FILE):
@@ -109,6 +110,16 @@ def midi_to_string_list(midi_file):
     except Exception as e:
         raise Exception(f"Error processing MIDI file: {str(e)}")
 
+def load_shared_songs():
+    if os.path.exists(SHARED_SONGS_FILE):
+        with open(SHARED_SONGS_FILE, 'r') as f:
+            return json.load(f)
+    return []
+
+def save_shared_songs(songs):
+    with open(SHARED_SONGS_FILE, 'w') as f:
+        json.dump(songs, f)
+
 @app.route('/register', methods=['GET', 'POST'])
 def register():
     if request.method == 'POST':
@@ -178,9 +189,9 @@ def logout():
     return redirect(url_for('login'))
 
 @app.route('/')
-@login_required
 def index():
-    return render_template('index.html')
+    shared_songs = load_shared_songs()
+    return render_template('index.html', shared_songs=shared_songs)
 
 @app.route('/profile')
 @login_required
@@ -466,6 +477,82 @@ def upload_file():
             return jsonify({'error': f'Invalid MIDI file: {str(e)}'}), 400
     
     return jsonify({'error': 'Invalid file type. Please upload a .mid file'}), 400
+
+@app.route('/share_song/<int:song_id>', methods=['POST'])
+@login_required
+def share_song(song_id):
+    username = session['user']
+    profile_data = load_user_profile(username)
+    songs = profile_data.get('songs', [])
+    
+    for song in songs:
+        if str(song['id']) == str(song_id):
+            shared_songs = load_shared_songs()
+            
+            # Check if song is already shared
+            if any(s['id'] == song_id for s in shared_songs):
+                return jsonify({'success': False, 'error': 'Song is already shared'})
+            
+            # Add song to shared songs
+            shared_song = {
+                'id': song['id'],
+                'name': song['name'],
+                'filepath': song['filepath'],
+                'size': song['size'],
+                'date': song['date'],
+                'shared_by': username,
+                'conversion_results': song.get('conversion_results')
+            }
+            shared_songs.append(shared_song)
+            save_shared_songs(shared_songs)
+            
+            # Update song in user's profile
+            song['is_shared'] = True
+            save_user_profile(username, profile_data)
+            
+            return jsonify({'success': True})
+    
+    return jsonify({'success': False, 'error': 'Song not found'})
+
+@app.route('/unshare_song/<int:song_id>', methods=['POST'])
+@login_required
+def unshare_song(song_id):
+    username = session['user']
+    profile_data = load_user_profile(username)
+    songs = profile_data.get('songs', [])
+    
+    for song in songs:
+        if str(song['id']) == str(song_id):
+            shared_songs = load_shared_songs()
+            
+            # Remove song from shared songs
+            shared_songs = [s for s in shared_songs if s['id'] != song_id]
+            save_shared_songs(shared_songs)
+            
+            # Update song in user's profile
+            song['is_shared'] = False
+            save_user_profile(username, profile_data)
+            
+            return jsonify({'success': True})
+    
+    return jsonify({'success': False, 'error': 'Song not found'})
+
+@app.route('/download_shared_song/<int:song_id>')
+@login_required
+def download_shared_song(song_id):
+    shared_songs = load_shared_songs()
+    
+    for song in shared_songs:
+        if str(song['id']) == str(song_id):
+            if os.path.exists(song['filepath']):
+                return send_file(
+                    song['filepath'],
+                    as_attachment=True,
+                    download_name=song['name']
+                )
+            return jsonify({'success': False, 'error': 'File not found'})
+    
+    return jsonify({'success': False, 'error': 'Song not found'})
 
 def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in app.config['ALLOWED_EXTENSIONS']
