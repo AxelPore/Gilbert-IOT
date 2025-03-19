@@ -1,207 +1,171 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>MIDI to String List Converter</title>
-    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
-    <style>
-        .drop-zone {
-            border: 2px dashed #cbd5e0;
-            transition: all 0.3s ease;
-        }
-        .drop-zone:hover {
-            border-color: #4299e1;
-            background-color: #ebf8ff;
-        }
-        .drop-zone.dragover {
-            border-color: #4299e1;
-            background-color: #ebf8ff;
-        }
-    </style>
-</head>
-<body class="bg-gray-100 min-h-screen">
-    <!-- Navigation Bar -->
-    <nav class="bg-white shadow-lg">
-        <div class="max-w-7xl mx-auto px-4">
-            <div class="flex justify-between h-16">
-                <div class="flex items-center space-x-4">
-                    <a href="/" class="text-xl font-bold text-gray-800">MIDI Converter</a>
-                    <a href="/" class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-green-600 hover:bg-green-700">
-                        Home
-                    </a>
-                </div>
-                <div class="flex items-center space-x-4">
-                    <a href="/profile" class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700">
-                        Profile
-                    </a>
+{% extends "base.html" %}
+
+{% block title %}MIDI to String List Converter{% endblock %}
+
+{% block content %}
+<div class="container mx-auto px-4 py-8">
+    <h1 class="text-4xl font-bold text-center text-gray-800 mb-8">MIDI to String List Converter</h1>
+    
+    <div class="max-w-2xl mx-auto bg-white rounded-lg shadow-md p-6">
+        <div class="drop-zone rounded-lg p-8 text-center mb-6" id="dropZone">
+            <input type="file" id="fileInput" class="hidden" accept=".mid">
+            <div class="space-y-4">
+                <svg class="mx-auto h-12 w-12 text-gray-400" stroke="currentColor" fill="none" viewBox="0 0 48 48">
+                    <path d="M28 8H12a4 4 0 00-4 4v20m32-12v8m0 0v8a4 4 0 01-4 4H12a4 4 0 01-4-4v-4m32-4l-3.172-3.172a4 4 0 00-5.656 0L28 28M8 32l9.172-9.172a4 4 0 015.656 0L28 28m0 0l4 4m4-24h8m-4-4v8m-12 4h.02" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+                </svg>
+                <div class="text-gray-600">
+                    <label for="fileInput" class="cursor-pointer">
+                        <span class="text-blue-500 hover:text-blue-600">Click to upload</span> or drag and drop
+                    </label>
+                    <p class="text-sm mt-1">MIDI files only (.mid)</p>
                 </div>
             </div>
         </div>
-    </nav>
 
-    <div class="container mx-auto px-4 py-8">
-        <h1 class="text-4xl font-bold text-center text-gray-800 mb-8">MIDI to String List Converter</h1>
-        
-        <div class="max-w-2xl mx-auto bg-white rounded-lg shadow-md p-6">
-            <div class="drop-zone rounded-lg p-8 text-center mb-6" id="dropZone">
-                <input type="file" id="fileInput" class="hidden" accept=".mid">
-                <div class="space-y-4">
-                    <svg class="mx-auto h-12 w-12 text-gray-400" stroke="currentColor" fill="none" viewBox="0 0 48 48">
-                        <path d="M28 8H12a4 4 0 00-4 4v20m32-12v8m0 0v8a4 4 0 01-4 4H12a4 4 0 01-4-4v-4m32-4l-3.172-3.172a4 4 0 00-5.656 0L28 28M8 32l9.172-9.172a4 4 0 015.656 0L28 28m0 0l4 4m4-24h8m-4-4v8m-12 4h.02" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
-                    </svg>
-                    <div class="text-gray-600">
-                        <label for="fileInput" class="cursor-pointer">
-                            <span class="text-blue-500 hover:text-blue-600">Click to upload</span> or drag and drop
-                        </label>
-                        <p class="text-sm mt-1">MIDI files only (.mid)</p>
-                    </div>
-                </div>
+        <div id="result" class="hidden">
+            <h2 class="text-xl font-semibold mb-4">MIDI Notes:</h2>
+            <div id="fileInfo" class="mb-4 p-4 bg-blue-50 rounded-lg">
+                <h3 class="font-semibold text-blue-800 mb-2">File Information:</h3>
+                <div id="fileInfoContent" class="text-sm text-blue-700"></div>
             </div>
-
-            <div id="result" class="hidden">
-                <h2 class="text-xl font-semibold mb-4">MIDI Notes:</h2>
-                <div id="fileInfo" class="mb-4 p-4 bg-blue-50 rounded-lg">
-                    <h3 class="font-semibold text-blue-800 mb-2">File Information:</h3>
-                    <div id="fileInfoContent" class="text-sm text-blue-700"></div>
-                </div>
-                <div id="notesList" class="bg-gray-50 rounded-lg p-4 max-h-96 overflow-y-auto"></div>
-            </div>
-
-            <div id="error" class="hidden text-red-500 mt-4"></div>
+            <div id="notesList" class="bg-gray-50 rounded-lg p-4 max-h-96 overflow-y-auto"></div>
         </div>
+
+        <div id="error" class="hidden text-red-500 mt-4"></div>
     </div>
+</div>
+{% endblock %}
 
-    <script>
-        const dropZone = document.getElementById('dropZone');
-        const fileInput = document.getElementById('fileInput');
-        const result = document.getElementById('result');
-        const notesList = document.getElementById('notesList');
-        const error = document.getElementById('error');
-        const fileInfo = document.getElementById('fileInfo');
-        const fileInfoContent = document.getElementById('fileInfoContent');
+{% block extra_scripts %}
+<script>
+    const dropZone = document.getElementById('dropZone');
+    const fileInput = document.getElementById('fileInput');
+    const result = document.getElementById('result');
+    const notesList = document.getElementById('notesList');
+    const error = document.getElementById('error');
+    const fileInfo = document.getElementById('fileInfo');
+    const fileInfoContent = document.getElementById('fileInfoContent');
 
-        // Drag and drop handlers
-        ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
-            dropZone.addEventListener(eventName, preventDefaults, false);
-        });
+    // Drag and drop handlers
+    ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+        dropZone.addEventListener(eventName, preventDefaults, false);
+    });
 
-        function preventDefaults(e) {
-            e.preventDefault();
-            e.stopPropagation();
-        }
+    function preventDefaults(e) {
+        e.preventDefault();
+        e.stopPropagation();
+    }
 
-        ['dragenter', 'dragover'].forEach(eventName => {
-            dropZone.addEventListener(eventName, highlight, false);
-        });
+    ['dragenter', 'dragover'].forEach(eventName => {
+        dropZone.addEventListener(eventName, highlight, false);
+    });
 
-        ['dragleave', 'drop'].forEach(eventName => {
-            dropZone.addEventListener(eventName, unhighlight, false);
-        });
+    ['dragleave', 'drop'].forEach(eventName => {
+        dropZone.addEventListener(eventName, unhighlight, false);
+    });
 
-        function highlight(e) {
-            dropZone.classList.add('dragover');
-        }
+    function highlight(e) {
+        dropZone.classList.add('dragover');
+    }
 
-        function unhighlight(e) {
-            dropZone.classList.remove('dragover');
-        }
+    function unhighlight(e) {
+        dropZone.classList.remove('dragover');
+    }
 
-        dropZone.addEventListener('drop', handleDrop, false);
+    dropZone.addEventListener('drop', handleDrop, false);
 
-        function handleDrop(e) {
-            const dt = e.dataTransfer;
-            const files = dt.files;
-            handleFiles(files);
-        }
+    function handleDrop(e) {
+        const dt = e.dataTransfer;
+        const files = dt.files;
+        handleFiles(files);
+    }
 
-        fileInput.addEventListener('change', function(e) {
-            handleFiles(this.files);
-        });
+    fileInput.addEventListener('change', function(e) {
+        handleFiles(this.files);
+    });
 
-        function handleFiles(files) {
-            if (files.length > 0) {
-                const file = files[0];
-                if (file.name.endsWith('.mid')) {
-                    uploadFile(file);
-                } else {
-                    showError('Please upload a .mid file');
-                }
+    function handleFiles(files) {
+        if (files.length > 0) {
+            const file = files[0];
+            if (file.name.endsWith('.mid')) {
+                uploadFile(file);
+            } else {
+                showError('Please upload a .mid file');
             }
         }
+    }
 
-        function formatFileSize(bytes) {
-            if (bytes === 0) return '0 Bytes';
-            const k = 1024;
-            const sizes = ['Bytes', 'KB', 'MB', 'GB'];
-            const i = Math.floor(Math.log(bytes) / Math.log(k));
-            return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
-        }
+    function formatFileSize(bytes) {
+        if (bytes === 0) return '0 Bytes';
+        const k = 1024;
+        const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+        const i = Math.floor(Math.log(bytes) / Math.log(k));
+        return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+    }
 
-        function formatDuration(ticks) {
-            // Assuming 480 ticks per beat and 120 beats per minute
-            const seconds = (ticks / 480) * (60 / 120);
-            const minutes = Math.floor(seconds / 60);
-            const remainingSeconds = Math.floor(seconds % 60);
-            return `${minutes}:${remainingSeconds.toString().padStart(2, '0')}`;
-        }
+    function formatDuration(ticks) {
+        // Assuming 480 ticks per beat and 120 beats per minute
+        const seconds = (ticks / 480) * (60 / 120);
+        const minutes = Math.floor(seconds / 60);
+        const remainingSeconds = Math.floor(seconds % 60);
+        return `${minutes}:${remainingSeconds.toString().padStart(2, '0')}`;
+    }
 
-        function showFileInfo(info) {
-            fileInfoContent.innerHTML = `
-                <p><strong>Name:</strong> ${info.name}</p>
-                <p><strong>Size:</strong> ${formatFileSize(info.size)}</p>
-                <p><strong>Duration:</strong> ${formatDuration(info.duration)}</p>
-            `;
-            fileInfo.classList.remove('hidden');
-        }
+    function showFileInfo(info) {
+        fileInfoContent.innerHTML = `
+            <p><strong>Name:</strong> ${info.name}</p>
+            <p><strong>Size:</strong> ${formatFileSize(info.size)}</p>
+            <p><strong>Duration:</strong> ${formatDuration(info.duration)}</p>
+        `;
+        fileInfo.classList.remove('hidden');
+    }
 
-        function uploadFile(file) {
-            const formData = new FormData();
-            formData.append('file', file);
+    function uploadFile(file) {
+        const formData = new FormData();
+        formData.append('file', file);
 
-            // Show loading state
-            result.classList.add('hidden');
-            error.classList.add('hidden');
-            dropZone.classList.add('opacity-50');
-            dropZone.classList.add('pointer-events-none');
+        // Show loading state
+        result.classList.add('hidden');
+        error.classList.add('hidden');
+        dropZone.classList.add('opacity-50');
+        dropZone.classList.add('pointer-events-none');
 
-            fetch('/upload', {
-                method: 'POST',
-                body: formData
-            })
-            .then(response => response.json())
-            .then(data => {
-                if (data.error) {
-                    showError(data.error);
-                } else {
-                    showNotes(data.notes);
-                    if (data.file_info) {
-                        showFileInfo(data.file_info);
-                    }
+        fetch('/upload', {
+            method: 'POST',
+            body: formData
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.error) {
+                showError(data.error);
+            } else {
+                showNotes(data.notes);
+                if (data.file_info) {
+                    showFileInfo(data.file_info);
                 }
-            })
-            .catch(err => {
-                showError('An error occurred while processing the file');
-            })
-            .finally(() => {
-                // Reset loading state
-                dropZone.classList.remove('opacity-50');
-                dropZone.classList.remove('pointer-events-none');
-            });
-        }
+            }
+        })
+        .catch(err => {
+            showError('An error occurred while processing the file');
+        })
+        .finally(() => {
+            // Reset loading state
+            dropZone.classList.remove('opacity-50');
+            dropZone.classList.remove('pointer-events-none');
+        });
+    }
 
-        function showNotes(notes) {
-            error.classList.add('hidden');
-            result.classList.remove('hidden');
-            notesList.innerHTML = notes.map(note => `<div class="py-1">${note}</div>`).join('');
-        }
+    function showNotes(notes) {
+        error.classList.add('hidden');
+        result.classList.remove('hidden');
+        notesList.innerHTML = notes.map(note => `<div class="py-1">${note}</div>`).join('');
+    }
 
-        function showError(message) {
-            result.classList.add('hidden');
-            fileInfo.classList.add('hidden');
-            error.classList.remove('hidden');
-            error.textContent = message;
-        }
-    </script>
-</body>
-</html> 
+    function showError(message) {
+        result.classList.add('hidden');
+        fileInfo.classList.add('hidden');
+        error.classList.remove('hidden');
+        error.textContent = message;
+    }
+</script>
+{% endblock %} 

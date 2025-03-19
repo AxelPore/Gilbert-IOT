@@ -1,171 +1,85 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Profile - MIDI Converter</title>
-    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
-</head>
-<body class="bg-gray-100 min-h-screen">
-    <!-- Navigation Bar -->
-    <nav class="bg-white shadow-lg">
-        <div class="max-w-7xl mx-auto px-4">
-            <div class="flex justify-between h-16">
-                <div class="flex items-center space-x-4">
-                    <a href="/" class="text-xl font-bold text-gray-800">MIDI Converter</a>
-                    <a href="/" class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-green-600 hover:bg-green-700">
-                        Home
-                    </a>
-                </div>
-                <div class="flex items-center space-x-4">
-                    <a href="/profile" class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700">
-                        Profile
-                    </a>
-                </div>
-            </div>
-        </div>
-    </nav>
+{% extends "base.html" %}
 
-    <div class="container mx-auto px-4 py-8">
-        <div class="max-w-3xl mx-auto">
-            <!-- Profile Header -->
-            <div class="bg-white rounded-lg shadow-md p-6 mb-6">
-                <div class="flex items-center space-x-6">
-                    <div class="relative">
-                        <img src="{{ profile.picture or 'https://via.placeholder.com/150' }}" 
-                             alt="Profile Picture" 
-                             class="w-32 h-32 rounded-full object-cover">
-                        <button onclick="document.getElementById('pictureInput').click()" 
-                                class="absolute bottom-0 right-0 bg-blue-500 text-white rounded-full p-2 hover:bg-blue-600">
-                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"></path>
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z"></path>
-                            </svg>
-                        </button>
-                        <input type="file" id="pictureInput" class="hidden" accept="image/*">
-                    </div>
-                    <div class="flex-1">
-                        <div class="flex items-center space-x-4">
-                            <h2 class="text-2xl font-bold text-gray-800">{{ profile.name or 'Your Name' }}</h2>
-                            <button onclick="toggleEdit()" class="text-blue-500 hover:text-blue-600">
-                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path>
-                                </svg>
-                            </button>
-                        </div>
-                        <p id="description" class="text-gray-600 mt-2">{{ profile.description or 'Add a description about yourself' }}</p>
-                        <textarea id="descriptionEdit" class="hidden w-full mt-2 p-2 border rounded-md"></textarea>
-                    </div>
+{% block title %}Profile{% endblock %}
+
+{% block content %}
+<div class="container mx-auto px-4 py-8">
+    <h1 class="text-4xl font-bold text-center text-gray-800 mb-8">Profile</h1>
+    
+    <div class="max-w-2xl mx-auto bg-white rounded-lg shadow-md p-6">
+        <div class="space-y-6">
+            <div class="flex items-center space-x-4">
+                <div class="w-24 h-24 bg-gray-200 rounded-full flex items-center justify-center">
+                    <span class="text-4xl text-gray-500">👤</span>
+                </div>
+                <div>
+                    <h2 class="text-2xl font-semibold text-gray-800">User Profile</h2>
+                    <p class="text-gray-600">Welcome to your profile page</p>
                 </div>
             </div>
 
-            <!-- Songs Section -->
-            <div class="bg-white rounded-lg shadow-md p-6">
-                <div class="flex justify-between items-center mb-6">
-                    <h3 class="text-xl font-semibold text-gray-800">Your Songs</h3>
-                    <button onclick="document.getElementById('songInput').click()" 
-                            class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700">
-                        Add Song
-                    </button>
-                    <input type="file" id="songInput" class="hidden" accept=".mid">
-                </div>
-
-                <!-- Songs List -->
+            <div class="border-t border-gray-200 pt-6">
+                <h3 class="text-xl font-semibold text-gray-800 mb-4">Customize Background</h3>
                 <div class="space-y-4">
-                    {% for song in songs %}
-                    <div class="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
-                        <div>
-                            <h4 class="font-medium text-gray-800">{{ song.name }}</h4>
-                            <p class="text-sm text-gray-600">{{ song.date }}</p>
-                        </div>
-                        <div class="flex space-x-2">
-                            <button onclick="editSong('{{ song.id }}')" class="text-blue-500 hover:text-blue-600">
-                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path>
-                                </svg>
-                            </button>
-                            <button onclick="deleteSong('{{ song.id }}')" class="text-red-500 hover:text-red-600">
-                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
-                                </svg>
-                            </button>
-                        </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-2">Background Color</label>
+                        <input type="color" id="bgColor" class="h-10 w-full rounded cursor-pointer">
                     </div>
-                    {% endfor %}
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-2">Background Image</label>
+                        <input type="file" id="bgImage" accept="image/*" class="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100">
+                    </div>
+                </div>
+            </div>
+
+            <div class="border-t border-gray-200 pt-6">
+                <h3 class="text-xl font-semibold text-gray-800 mb-4">Recent Activity</h3>
+                <div class="space-y-4">
+                    <div class="bg-gray-50 rounded-lg p-4">
+                        <p class="text-gray-600">No recent activity to display</p>
+                    </div>
                 </div>
             </div>
         </div>
     </div>
+</div>
+{% endblock %}
 
-    <script>
-        function toggleEdit() {
-            const description = document.getElementById('description');
-            const descriptionEdit = document.getElementById('descriptionEdit');
-            if (description.classList.contains('hidden')) {
-                description.classList.remove('hidden');
-                descriptionEdit.classList.add('hidden');
-            } else {
-                description.classList.add('hidden');
-                descriptionEdit.classList.remove('hidden');
-                descriptionEdit.value = description.textContent;
-            }
+{% block extra_scripts %}
+<script>
+    // Load saved background settings
+    document.addEventListener('DOMContentLoaded', function() {
+        const savedColor = localStorage.getItem('bgColor');
+        const savedImage = localStorage.getItem('bgImage');
+        
+        if (savedColor) {
+            document.getElementById('bgColor').value = savedColor;
+            document.body.style.backgroundColor = savedColor;
         }
-
-        // Handle profile picture upload
-        document.getElementById('pictureInput').addEventListener('change', function(e) {
-            const file = e.target.files[0];
-            if (file) {
-                const formData = new FormData();
-                formData.append('picture', file);
-                fetch('/update_profile_picture', {
-                    method: 'POST',
-                    body: formData
-                })
-                .then(response => response.json())
-                .then(data => {
-                    if (data.success) {
-                        location.reload();
-                    }
-                });
-            }
-        });
-
-        // Handle song upload
-        document.getElementById('songInput').addEventListener('change', function(e) {
-            const file = e.target.files[0];
-            if (file && file.name.endsWith('.mid')) {
-                const formData = new FormData();
-                formData.append('song', file);
-                fetch('/add_song', {
-                    method: 'POST',
-                    body: formData
-                })
-                .then(response => response.json())
-                .then(data => {
-                    if (data.success) {
-                        location.reload();
-                    }
-                });
-            }
-        });
-
-        function editSong(songId) {
-            // Implement song editing functionality
+        
+        if (savedImage) {
+            document.body.style.backgroundImage = `url(${savedImage})`;
         }
+    });
 
-        function deleteSong(songId) {
-            if (confirm('Are you sure you want to delete this song?')) {
-                fetch(`/delete_song/${songId}`, {
-                    method: 'DELETE'
-                })
-                .then(response => response.json())
-                .then(data => {
-                    if (data.success) {
-                        location.reload();
-                    }
-                });
-            }
+    // Handle background color change
+    document.getElementById('bgColor').addEventListener('change', function(e) {
+        const color = e.target.value;
+        document.body.style.backgroundColor = color;
+        localStorage.setItem('bgColor', color);
+    });
+
+    // Handle background image upload
+    document.getElementById('bgImage').addEventListener('change', function(e) {
+        const file = e.target.files[0];
+        if (file) {
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                document.body.style.backgroundImage = `url(${e.target.result})`;
+                localStorage.setItem('bgImage', e.target.result);
+            };
+            reader.readAsDataURL(file);
         }
-    </script>
-</body>
-</html> 
+    });
+</script>
+{% endblock %} 

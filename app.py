@@ -34,7 +34,7 @@ def midi_to_string_list(midi_file):
         mid = mido.MidiFile(midi_file)
         notes = []
         total_notes = 0
-        max_notes = 10000  # Limit the number of notes to prevent memory issues
+        max_notes = 30000  # Increased limit to 30,000 notes
         
         for track in mid.tracks:
             for msg in track:
