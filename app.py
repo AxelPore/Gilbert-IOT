@@ -4,11 +4,13 @@ import os
 from werkzeug.utils import secure_filename
 from datetime import datetime
 import json
+import sys
 
 app = Flask(__name__)
 app.config['UPLOAD_FOLDER'] = 'uploads'
 app.config['PROFILE_FOLDER'] = 'static/profiles'
-app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16MB max file size
+# Increase max file size to 500MB
+app.config['MAX_CONTENT_LENGTH'] = 500 * 1024 * 1024  # 500MB max file size
 
 # Ensure required folders exist
 os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
@@ -28,17 +30,28 @@ def save_profile(profile_data):
         json.dump(profile_data, f)
 
 def midi_to_string_list(midi_file):
-    mid = mido.MidiFile(midi_file)
-    notes = []
-    
-    for track in mid.tracks:
-        for msg in track:
-            if msg.type == 'note_on' and msg.velocity > 0:
-                notes.append(f"Note: {msg.note}, Velocity: {msg.velocity}, Time: {msg.time}")
-            elif msg.type == 'note_off':
-                notes.append(f"Note Off: {msg.note}, Time: {msg.time}")
-    
-    return notes
+    try:
+        mid = mido.MidiFile(midi_file)
+        notes = []
+        total_notes = 0
+        max_notes = 10000  # Limit the number of notes to prevent memory issues
+        
+        for track in mid.tracks:
+            for msg in track:
+                if total_notes >= max_notes:
+                    notes.append(f"... (Showing first {max_notes} notes)")
+                    return notes
+                    
+                if msg.type == 'note_on' and msg.velocity > 0:
+                    notes.append(f"Note: {msg.note}, Velocity: {msg.velocity}, Time: {msg.time}")
+                    total_notes += 1
+                elif msg.type == 'note_off':
+                    notes.append(f"Note Off: {msg.note}, Time: {msg.time}")
+                    total_notes += 1
+        
+        return notes
+    except Exception as e:
+        raise Exception(f"Error processing MIDI file: {str(e)}")
 
 @app.route('/')
 def index():
@@ -81,24 +94,34 @@ def add_song():
         return jsonify({'error': 'No selected file'}), 400
     
     if file and file.filename.endswith('.mid'):
-        filename = secure_filename(file.filename)
-        filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
-        file.save(filepath)
-        
-        profile_data = load_profile()
-        song_data = {
-            'id': str(len(profile_data.get('songs', [])) + 1),
-            'name': filename,
-            'date': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
-            'filepath': filepath
-        }
-        
-        if 'songs' not in profile_data:
-            profile_data['songs'] = []
-        profile_data['songs'].append(song_data)
-        save_profile(profile_data)
-        
-        return jsonify({'success': True})
+        try:
+            filename = secure_filename(file.filename)
+            filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+            file.save(filepath)
+            
+            # Verify the file is a valid MIDI file
+            mid = mido.MidiFile(filepath)
+            
+            profile_data = load_profile()
+            song_data = {
+                'id': str(len(profile_data.get('songs', [])) + 1),
+                'name': filename,
+                'date': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+                'filepath': filepath,
+                'size': os.path.getsize(filepath),
+                'duration': sum(msg.time for msg in mid.tracks[0]) if mid.tracks else 0
+            }
+            
+            if 'songs' not in profile_data:
+                profile_data['songs'] = []
+            profile_data['songs'].append(song_data)
+            save_profile(profile_data)
+            
+            return jsonify({'success': True})
+        except Exception as e:
+            if os.path.exists(filepath):
+                os.remove(filepath)
+            return jsonify({'error': f'Invalid MIDI file: {str(e)}'}), 400
     
     return jsonify({'error': 'Invalid file type. Please upload a .mid file'}), 400
 
@@ -130,16 +153,34 @@ def upload_file():
         return jsonify({'error': 'No selected file'}), 400
     
     if file and file.filename.endswith('.mid'):
-        filename = secure_filename(file.filename)
-        filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
-        file.save(filepath)
-        
         try:
-            notes = midi_to_string_list(filepath)
-            os.remove(filepath)  # Clean up the uploaded file
-            return jsonify({'notes': notes})
+            filename = secure_filename(file.filename)
+            filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+            file.save(filepath)
+            
+            # Verify the file is a valid MIDI file
+            mid = mido.MidiFile(filepath)
+            
+            try:
+                notes = midi_to_string_list(filepath)
+                os.remove(filepath)  # Clean up the uploaded file
+                return jsonify({
+                    'notes': notes,
+                    'file_info': {
+                        'name': filename,
+                        'size': os.path.getsize(filepath),
+                        'duration': sum(msg.time for msg in mid.tracks[0]) if mid.tracks else 0
+                    }
+                })
+            except Exception as e:
+                if os.path.exists(filepath):
+                    os.remove(filepath)
+                return jsonify({'error': str(e)}), 500
+                
         except Exception as e:
-            return jsonify({'error': str(e)}), 500
+            if os.path.exists(filepath):
+                os.remove(filepath)
+            return jsonify({'error': f'Invalid MIDI file: {str(e)}'}), 400
     
     return jsonify({'error': 'Invalid file type. Please upload a .mid file'}), 400
 

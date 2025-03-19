@@ -25,10 +25,13 @@
     <nav class="bg-white shadow-lg">
         <div class="max-w-7xl mx-auto px-4">
             <div class="flex justify-between h-16">
-                <div class="flex items-center">
+                <div class="flex items-center space-x-4">
                     <a href="/" class="text-xl font-bold text-gray-800">MIDI Converter</a>
+                    <a href="/" class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-green-600 hover:bg-green-700">
+                        Home
+                    </a>
                 </div>
-                <div class="flex items-center">
+                <div class="flex items-center space-x-4">
                     <a href="/profile" class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700">
                         Profile
                     </a>
@@ -58,6 +61,10 @@
 
             <div id="result" class="hidden">
                 <h2 class="text-xl font-semibold mb-4">MIDI Notes:</h2>
+                <div id="fileInfo" class="mb-4 p-4 bg-blue-50 rounded-lg">
+                    <h3 class="font-semibold text-blue-800 mb-2">File Information:</h3>
+                    <div id="fileInfoContent" class="text-sm text-blue-700"></div>
+                </div>
                 <div id="notesList" class="bg-gray-50 rounded-lg p-4 max-h-96 overflow-y-auto"></div>
             </div>
 
@@ -71,6 +78,8 @@
         const result = document.getElementById('result');
         const notesList = document.getElementById('notesList');
         const error = document.getElementById('error');
+        const fileInfo = document.getElementById('fileInfo');
+        const fileInfoContent = document.getElementById('fileInfoContent');
 
         // Drag and drop handlers
         ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
@@ -121,9 +130,40 @@
             }
         }
 
+        function formatFileSize(bytes) {
+            if (bytes === 0) return '0 Bytes';
+            const k = 1024;
+            const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+        }
+
+        function formatDuration(ticks) {
+            // Assuming 480 ticks per beat and 120 beats per minute
+            const seconds = (ticks / 480) * (60 / 120);
+            const minutes = Math.floor(seconds / 60);
+            const remainingSeconds = Math.floor(seconds % 60);
+            return `${minutes}:${remainingSeconds.toString().padStart(2, '0')}`;
+        }
+
+        function showFileInfo(info) {
+            fileInfoContent.innerHTML = `
+                <p><strong>Name:</strong> ${info.name}</p>
+                <p><strong>Size:</strong> ${formatFileSize(info.size)}</p>
+                <p><strong>Duration:</strong> ${formatDuration(info.duration)}</p>
+            `;
+            fileInfo.classList.remove('hidden');
+        }
+
         function uploadFile(file) {
             const formData = new FormData();
             formData.append('file', file);
+
+            // Show loading state
+            result.classList.add('hidden');
+            error.classList.add('hidden');
+            dropZone.classList.add('opacity-50');
+            dropZone.classList.add('pointer-events-none');
 
             fetch('/upload', {
                 method: 'POST',
@@ -135,10 +175,18 @@
                     showError(data.error);
                 } else {
                     showNotes(data.notes);
+                    if (data.file_info) {
+                        showFileInfo(data.file_info);
+                    }
                 }
             })
             .catch(err => {
                 showError('An error occurred while processing the file');
+            })
+            .finally(() => {
+                // Reset loading state
+                dropZone.classList.remove('opacity-50');
+                dropZone.classList.remove('pointer-events-none');
             });
         }
 
@@ -150,6 +198,7 @@
 
         function showError(message) {
             result.classList.add('hidden');
+            fileInfo.classList.add('hidden');
             error.classList.remove('hidden');
             error.textContent = message;
         }
