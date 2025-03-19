@@ -1,10 +1,12 @@
-from flask import Flask, render_template, request, jsonify, send_file
+from flask import Flask, render_template, request, jsonify, send_file, redirect, url_for, session
 import mido
 import os
 from werkzeug.utils import secure_filename
 from datetime import datetime
 import json
 import sys
+from functools import wraps
+import hashlib
 
 app = Flask(__name__)
 app.config['UPLOAD_FOLDER'] = 'uploads'
@@ -13,11 +15,95 @@ app.config['PROFILE_PICTURES_FOLDER'] = 'static/profile_pictures'
 app.config['ALLOWED_EXTENSIONS'] = {'mid', 'png', 'jpg', 'jpeg'}
 # Increase max file size to 500MB
 app.config['MAX_CONTENT_LENGTH'] = 500 * 1024 * 1024  # 500MB max file size
+app.secret_key = 'your-secret-key-here'  # Change this to a secure secret key
 
 # Ensure required folders exist
 os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
 os.makedirs(app.config['PROFILE_FOLDER'], exist_ok=True)
 os.makedirs(app.config['PROFILE_PICTURES_FOLDER'], exist_ok=True)
+
+# User data storage
+USERS_FILE = 'users.json'
+
+def load_users():
+    if os.path.exists(USERS_FILE):
+        with open(USERS_FILE, 'r') as f:
+            return json.load(f)
+    return {}
+
+def save_users(users):
+    with open(USERS_FILE, 'w') as f:
+        json.dump(users, f)
+
+def hash_password(password):
+    return hashlib.sha256(password.encode()).hexdigest()
+
+# Login required decorator
+def login_required(f):
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        if 'user' not in session:
+            return redirect(url_for('login'))
+        return f(*args, **kwargs)
+    return decorated_function
+
+@app.route('/register', methods=['GET', 'POST'])
+def register():
+    if request.method == 'POST':
+        username = request.form.get('username')
+        email = request.form.get('email')
+        password = request.form.get('password')
+        confirm_password = request.form.get('confirm_password')
+        
+        users = load_users()
+        
+        # Validate input
+        if not username or not email or not password:
+            return render_template('register.html', error='All fields are required')
+        
+        if password != confirm_password:
+            return render_template('register.html', error='Passwords do not match')
+        
+        if username in users:
+            return render_template('register.html', error='Username already exists')
+        
+        if any(user['email'] == email for user in users.values()):
+            return render_template('register.html', error='Email already registered')
+        
+        # Create new user
+        users[username] = {
+            'email': email,
+            'password': hash_password(password),
+            'created_at': datetime.now().isoformat()
+        }
+        save_users(users)
+        
+        # Log the user in
+        session['user'] = username
+        return redirect(url_for('index'))
+    
+    return render_template('register.html')
+
+@app.route('/login', methods=['GET', 'POST'])
+def login():
+    if request.method == 'POST':
+        username = request.form.get('username')
+        password = request.form.get('password')
+        
+        users = load_users()
+        
+        if username in users and users[username]['password'] == hash_password(password):
+            session['user'] = username
+            return redirect(url_for('index'))
+        else:
+            return render_template('login.html', error='Invalid username or password')
+    
+    return render_template('login.html')
+
+@app.route('/logout')
+def logout():
+    session.pop('user', None)
+    return redirect(url_for('login'))
 
 # Load profile data
 def load_profile():
@@ -57,10 +143,12 @@ def midi_to_string_list(midi_file):
         raise Exception(f"Error processing MIDI file: {str(e)}")
 
 @app.route('/')
+@login_required
 def index():
     return render_template('index.html')
 
 @app.route('/profile')
+@login_required
 def profile():
     profile_data = load_profile()
     return render_template('profile.html', profile=profile_data, songs=profile_data.get('songs', []))

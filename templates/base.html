@@ -32,6 +32,7 @@
 </head>
 <body class="bg-gray-100 min-h-screen" id="mainBody">
     <!-- Navigation Bar -->
+    {% if session.user %}
     <nav class="bg-white shadow-lg">
         <div class="max-w-7xl mx-auto px-4">
             <div class="flex justify-between h-16">
@@ -45,10 +46,14 @@
                     <a href="/profile" class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700">
                         Profile
                     </a>
+                    <a href="/logout" class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-red-600 hover:bg-red-700">
+                        Logout
+                    </a>
                 </div>
             </div>
         </div>
     </nav>
+    {% endif %}
 
     {% block content %}{% endblock %}
 
