@@ -1,11 +1,16 @@
 #include <Arduino.h>
-#include <vector>
+
+const int buzzer = 25;
+const int buzzer2 = 32;
+const int buzzer3 = 33;
+
 
 #include <iostream>
 #include <fstream>
 #include <cstdio>
 #include <string>
 #include <vector>
+
 
 #ifdef ESP8266
   #include <ESP8266WiFi.h>
@@ -17,7 +22,7 @@
 
 // Wi-Fi credentials
 const char* ssid = "Never gonna give you up";
-const char* password = "ctji4838";
+const char* password = "n€verG0nnAl€tyoUd0wn";
 
 // MQTT broker details
 const char* mqttServer = "broker.emqx.io";
@@ -28,7 +33,7 @@ const char* clientId = "VieGehtEsDirMeinFreund"; // Must be unique on the broker
 
 // Topics
 const char* publishTopic = "/gilbert/IoT";
-const char* subscribeTopic = "/gilbert";
+const char* subscribeTopic = "/gilbert/#";
 
 WiFiClient espClient;
 PubSubClient client(espClient);
@@ -61,7 +66,7 @@ void connectToMQTT() {
 
 // Callback function
 void mqttCallback(char* topic, byte* payload, unsigned int length) {
-  Serial.print("Message arrived [" );
+  Serial.print("Message arrived [");
   Serial.print(topic);
   Serial.print("]: ");
 
@@ -71,12 +76,31 @@ void mqttCallback(char* topic, byte* payload, unsigned int length) {
   }
   message[length] = '\0';
   Serial.println(message);
+
+  // Handle commands
+  if (strcmp(message, "play") == 0) {
+    client.publish(publishTopic, "Playing melody...");
+  } else if (strcmp(message, "status") == 0) {
+    char statusMsg[50];
+    snprintf(statusMsg, sizeof(statusMsg), "Device is running. IP: %s", WiFi.localIP().toString().c_str());
+    client.publish(publishTopic, statusMsg);
+  }
 }
 
 
 void setup() {
   Serial.begin(115200);
+  delay(1000); // Give some time for serial to initialize
 
+  // Set up buzzer pins
+  pinMode(buzzer, OUTPUT);
+  pinMode(buzzer2, OUTPUT);
+  pinMode(buzzer3, OUTPUT);
+  digitalWrite(buzzer, LOW);
+  digitalWrite(buzzer2, LOW);
+  digitalWrite(buzzer3, LOW);
+
+  
   // Connect to Wi-Fi
   connectToWiFi();
 
@@ -90,17 +114,35 @@ void setup() {
   // Subscribe to topic
   client.subscribe(subscribeTopic);
 
-  // Publish a test message
+  // Send initial status message
+  char startupMsg[50];
+  snprintf(startupMsg, sizeof(startupMsg), "Device started. IP: %s", WiFi.localIP().toString().c_str());
+  client.publish(publishTopic, startupMsg);
   
 }
 
 void loop() {
+
+  client.loop();
+  delay(10); // Small delay to prevent watchdog issues
+
   if (!client.connected()) {
     connectToMQTT();
   }
-  const char* msg = "Hello, MQTT!";
-
-  client.publish(publishTopic, msg);
-  delay(1000);
-  client.loop();
+  
+  // Send heartbeat message every 30 seconds
+  static unsigned long lastHeartbeat = 0;
+  if (millis() - lastHeartbeat > 30000) {
+    client.publish(publishTopic, "Device is alive");
+    lastHeartbeat = millis();
+  }
+  
+  // Check for incoming messages
+  if (Serial.available() > 0) {
+    String message = Serial.readStringUntil('\n');
+    message.trim();
+    client.publish(publishTopic, message.c_str());
+  }
+  
+  delay(10); // Small delay to prevent bouncing
 }
