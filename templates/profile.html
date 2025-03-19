@@ -4,19 +4,17 @@
 
 {% block content %}
 <div class="container mx-auto px-4 py-8">
-    <h1 class="text-4xl font-bold text-center text-gray-800 mb-8">Profile</h1>
-    
-    <div class="max-w-2xl mx-auto bg-white rounded-lg shadow-md p-6">
+    <div class="max-w-2xl mx-auto bg-gray-900/95 backdrop-blur-sm rounded-lg shadow-lg p-6 border border-gray-700/50">
         <div class="space-y-6">
             <!-- Profile Header -->
-            <div class="flex items-center space-x-4">
+            <div class="flex flex-col items-center space-y-4">
                 <div class="relative">
-                    <div class="w-24 h-24 bg-gray-200 rounded-full flex items-center justify-center overflow-hidden">
+                    <div class="w-32 h-32 bg-gray-800/95 backdrop-blur-sm rounded-full flex items-center justify-center overflow-hidden border border-gray-700/50">
                         <img id="profilePicture" src="{{ profile.picture or 'https://via.placeholder.com/150' }}" 
                              alt="Profile Picture" 
                              class="w-full h-full object-cover">
                     </div>
-                    <label for="pictureInput" class="absolute bottom-0 right-0 bg-blue-500 text-white rounded-full p-2 cursor-pointer hover:bg-blue-600">
+                    <label id="pictureUploadLabel" for="pictureInput" class="absolute bottom-0 right-0 bg-blue-500/95 backdrop-blur-sm text-white rounded-full p-2 cursor-pointer hover:bg-blue-600 hidden [text-shadow:_0_3px_6px_rgb(0_0_0_/_1)]">
                         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"></path>
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z"></path>
@@ -24,43 +22,45 @@
                     </label>
                     <input type="file" id="pictureInput" class="hidden" accept="image/*">
                 </div>
-                <div class="flex-1">
-                    <div class="flex items-center space-x-2">
-                        <h2 id="displayName" class="text-2xl font-semibold text-gray-800">{{ profile.name or 'Your Name' }}</h2>
-                        <button onclick="toggleNameEdit()" class="text-blue-500 hover:text-blue-600">
-                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path>
-                            </svg>
-                        </button>
-                    </div>
-                    <input type="text" id="nameInput" class="hidden w-full mt-2 p-2 border rounded-md" value="{{ profile.name or 'Your Name' }}">
-                    <p class="text-gray-600">Welcome to your profile page</p>
+                <div class="flex items-center space-x-2">
+                    <h2 id="displayName" class="text-3xl font-bold text-white [text-shadow:_0_4px_8px_rgb(0_0_0_/_1),_0_0_10px_rgb(0_0_0_/_1)]">{{ profile.name or 'Your Name' }}</h2>
+                    <button id="nameEditButton" onclick="toggleNameEdit()" class="text-blue-300 hover:text-blue-200 hidden [text-shadow:_0_4px_8px_rgb(0_0_0_/_1),_0_0_10px_rgb(0_0_0_/_1)]">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path>
+                        </svg>
+                    </button>
                 </div>
+                <input type="text" id="nameInput" class="hidden w-full p-2 border border-gray-600/50 rounded-md text-center bg-gray-800/95 backdrop-blur-sm text-white text-xl font-bold [text-shadow:_0_4px_8px_rgb(0_0_0_/_1),_0_0_10px_rgb(0_0_0_/_1)]" value="{{ profile.name or 'Your Name' }}">
+                
+                <!-- Modify Profile Button -->
+                <button id="modifyProfileBtn" onclick="toggleModifyMode()" class="mt-4 px-4 py-2 bg-blue-500/95 backdrop-blur-sm text-white rounded-md hover:bg-blue-600 transition-colors [text-shadow:_0_3px_6px_rgb(0_0_0_/_1)]">
+                    Modify Profile
+                </button>
             </div>
 
             <!-- Songs Section -->
-            <div class="border-t border-gray-200 pt-6">
+            <div class="border-t border-gray-700/50 pt-6">
                 <div class="flex justify-between items-center mb-4">
-                    <h3 class="text-xl font-semibold text-gray-800">Your Songs</h3>
-                    <label for="songInput" class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 cursor-pointer">
+                    <h3 class="text-xl font-bold text-white [text-shadow:_0_3px_6px_rgb(0_0_0_/_1)]">Your Songs</h3>
+                    <label id="addSongLabel" for="songInput" class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-bold rounded-md text-white bg-blue-600/95 backdrop-blur-sm hover:bg-blue-700 cursor-pointer hidden [text-shadow:_0_3px_6px_rgb(0_0_0_/_1)]">
                         Add Song
                     </label>
                     <input type="file" id="songInput" class="hidden" accept=".mid">
                 </div>
                 <div id="songsList" class="space-y-4">
                     {% for song in songs %}
-                    <div class="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
+                    <div class="flex items-center justify-between p-4 bg-gray-800/95 backdrop-blur-sm rounded-lg border border-gray-700/50">
                         <div>
-                            <h4 class="font-medium text-gray-800">{{ song.name }}</h4>
-                            <p class="text-sm text-gray-600">{{ song.date }}</p>
+                            <h4 class="font-bold text-white [text-shadow:_0_3px_6px_rgb(0_0_0_/_1)]">{{ song.name }}</h4>
+                            <p class="text-sm text-gray-300 [text-shadow:_0_3px_6px_rgb(0_0_0_/_1)]">{{ song.date }}</p>
                         </div>
                         <div class="flex space-x-2">
-                            <button onclick="convertSong('{{ song.id }}')" class="text-green-500 hover:text-green-600">
+                            <button onclick="convertSong('{{ song.id }}')" class="text-green-300 hover:text-green-200 [text-shadow:_0_3px_6px_rgb(0_0_0_/_1)]">
                                 <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"></path>
                                 </svg>
                             </button>
-                            <button onclick="deleteSong('{{ song.id }}')" class="text-red-500 hover:text-red-600">
+                            <button id="deleteSongBtn" onclick="deleteSong('{{ song.id }}')" class="text-red-300 hover:text-red-200 hidden [text-shadow:_0_3px_6px_rgb(0_0_0_/_1)]">
                                 <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
                                 </svg>
@@ -72,26 +72,26 @@
             </div>
 
             <!-- Background Customization -->
-            <div class="border-t border-gray-200 pt-6">
-                <h3 class="text-xl font-semibold text-gray-800 mb-4">Customize Background</h3>
+            <div class="border-t border-gray-700/50 pt-6">
+                <h3 class="text-xl font-bold text-white mb-4 [text-shadow:_0_3px_6px_rgb(0_0_0_/_1)]">Customize Background</h3>
                 <div class="space-y-4">
                     <div>
-                        <label class="block text-sm font-medium text-gray-700 mb-2">Background Color</label>
-                        <input type="color" id="bgColor" class="h-10 w-full rounded cursor-pointer">
+                        <label class="block text-sm font-bold text-gray-200 mb-2 [text-shadow:_0_3px_6px_rgb(0_0_0_/_1)]">Background Color</label>
+                        <input type="color" id="bgColor" class="h-10 w-full rounded cursor-pointer bg-gray-800/95 backdrop-blur-sm">
                     </div>
                     <div>
-                        <label class="block text-sm font-medium text-gray-700 mb-2">Background Image</label>
-                        <input type="file" id="bgImage" accept="image/*" class="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100">
+                        <label class="block text-sm font-bold text-gray-200 mb-2 [text-shadow:_0_3px_6px_rgb(0_0_0_/_1)]">Background Image</label>
+                        <input type="file" id="bgImage" accept="image/*" class="block w-full text-sm text-gray-300 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-bold file:bg-blue-500/95 file:text-white hover:file:bg-blue-600 [text-shadow:_0_3px_6px_rgb(0_0_0_/_1)]">
                     </div>
                 </div>
             </div>
 
             <!-- Recent Activity -->
-            <div class="border-t border-gray-200 pt-6">
-                <h3 class="text-xl font-semibold text-gray-800 mb-4">Recent Activity</h3>
+            <div class="border-t border-gray-700/50 pt-6">
+                <h3 class="text-xl font-bold text-white mb-4 [text-shadow:_0_3px_6px_rgb(0_0_0_/_1)]">Recent Activity</h3>
                 <div class="space-y-4">
-                    <div class="bg-gray-50 rounded-lg p-4">
-                        <p class="text-gray-600">No recent activity to display</p>
+                    <div class="bg-gray-800/95 backdrop-blur-sm rounded-lg p-4 border border-gray-700/50">
+                        <p class="text-gray-300 [text-shadow:_0_3px_6px_rgb(0_0_0_/_1)]">No recent activity to display</p>
                     </div>
                 </div>
             </div>
@@ -102,6 +102,40 @@
 
 {% block extra_scripts %}
 <script>
+    let isModifyMode = false;
+
+    function toggleModifyMode() {
+        isModifyMode = !isModifyMode;
+        const modifyBtn = document.getElementById('modifyProfileBtn');
+        const pictureUploadLabel = document.getElementById('pictureUploadLabel');
+        const nameEditButton = document.getElementById('nameEditButton');
+        const addSongLabel = document.getElementById('addSongLabel');
+        const deleteButtons = document.querySelectorAll('#deleteSongBtn');
+        
+        if (isModifyMode) {
+            modifyBtn.textContent = 'Done';
+            modifyBtn.classList.remove('bg-blue-500/95', 'hover:bg-blue-600');
+            modifyBtn.classList.add('bg-green-500/95', 'hover:bg-green-600');
+            pictureUploadLabel.classList.remove('hidden');
+            nameEditButton.classList.remove('hidden');
+            addSongLabel.classList.remove('hidden');
+            deleteButtons.forEach(btn => btn.classList.remove('hidden'));
+        } else {
+            modifyBtn.textContent = 'Modify Profile';
+            modifyBtn.classList.remove('bg-green-500/95', 'hover:bg-green-600');
+            modifyBtn.classList.add('bg-blue-500/95', 'hover:bg-blue-600');
+            pictureUploadLabel.classList.add('hidden');
+            nameEditButton.classList.add('hidden');
+            addSongLabel.classList.add('hidden');
+            deleteButtons.forEach(btn => btn.classList.add('hidden'));
+            
+            // Exit name edit mode if active
+            if (!document.getElementById('displayName').classList.contains('hidden')) {
+                toggleNameEdit();
+            }
+        }
+    }
+
     // Profile picture upload
     document.getElementById('pictureInput').addEventListener('change', function(e) {
         const file = e.target.files[0];
