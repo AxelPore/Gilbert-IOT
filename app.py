@@ -305,9 +305,21 @@ def convert_song(song_id):
     profile_data = load_user_profile(username)
     songs = profile_data.get('songs', [])
     
+    print(f"Converting song ID: {song_id}")  # Debug log
+    print(f"Available songs: {songs}")  # Debug log
+    
     for song in songs:
-        if song['id'] == song_id:
+        if str(song['id']) == str(song_id):  # Convert both to strings for comparison
             try:
+                print(f"Found song: {song}")  # Debug log
+                
+                # Check if conversion results already exist
+                if 'conversion_results' in song:
+                    print("Using cached conversion results")  # Debug log
+                    return render_template('conversion_results.html', 
+                                        notes=song['conversion_results']['notes'],
+                                        file_info=song['conversion_results']['file_info'])
+                
                 mid = mido.MidiFile(song['filepath'])
                 notes = []
                 max_notes = 30000  # Increased note limit
@@ -315,21 +327,41 @@ def convert_song(song_id):
                 for track in mid.tracks:
                     for msg in track:
                         if msg.type == 'note_on' and msg.velocity > 0:
-                            note_name = mido.note_name(msg.note)
-                            notes.append(f"Note: {note_name}, Velocity: {msg.velocity}, Time: {msg.time}")
+                            # Convert MIDI note number to note name
+                            note_names = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B']
+                            octave = (msg.note // 12) - 1
+                            note_name = note_names[msg.note % 12]
+                            note_string = f"{note_name}{octave}"
+                            
+                            notes.append(f"Note: {note_string}, Velocity: {msg.velocity}, Time: {msg.time}")
                             if len(notes) >= max_notes:
                                 notes.append(f"... (showing first {max_notes} notes)")
                                 break
                 
-                return render_template('index.html', notes=notes, file_info={
-                    'name': song['name'],
-                    'size': os.path.getsize(song['filepath']),
-                    'duration': sum(msg.time for msg in mid.tracks[0])
-                })
+                print(f"Generated {len(notes)} notes")  # Debug log
+                
+                # Store conversion results in the song data
+                conversion_results = {
+                    'notes': notes,
+                    'file_info': {
+                        'name': song['name'],
+                        'size': os.path.getsize(song['filepath']),
+                        'duration': sum(msg.time for msg in mid.tracks[0])
+                    }
+                }
+                song['conversion_results'] = conversion_results
+                save_user_profile(username, profile_data)
+                
+                # Return the conversion results
+                return render_template('conversion_results.html', 
+                                    notes=notes, 
+                                    file_info=conversion_results['file_info'])
             except Exception as e:
-                return render_template('index.html', error=str(e))
+                print(f"Error processing song: {str(e)}")  # Debug log
+                return render_template('conversion_results.html', error=str(e))
     
-    return render_template('index.html', error='Song not found')
+    print(f"Song not found with ID: {song_id}")  # Debug log
+    return render_template('conversion_results.html', error='Song not found')
 
 @app.route('/update_background', methods=['POST'])
 @login_required
