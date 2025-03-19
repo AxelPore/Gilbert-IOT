@@ -60,21 +60,27 @@ def get_user_pictures_folder(username):
     os.makedirs(user_pictures_folder, exist_ok=True)
     return user_pictures_folder
 
-def load_profile(username):
-    profile_path = get_user_profile_path(username)
-    if os.path.exists(profile_path):
-        with open(profile_path, 'r') as f:
-            return json.load(f)
-    return {
-        'name': username,
-        'description': '',
-        'picture': None,
-        'songs': [],
-        'background_color': '#f3f4f6',
-        'background_image': None
-    }
+def load_user_profile(username):
+    """Load user profile from JSON file"""
+    try:
+        with open(get_user_profile_path(username), 'r') as f:
+            profile = json.load(f)
+            # Ensure background settings exist
+            if 'background_color' not in profile:
+                profile['background_color'] = '#1f2937'  # Default dark gray
+            if 'background_image' not in profile:
+                profile['background_image'] = None
+            return profile
+    except FileNotFoundError:
+        return {
+            'name': username,
+            'picture': None,
+            'created_at': datetime.now().isoformat(),
+            'background_color': '#1f2937',  # Default dark gray
+            'background_image': None
+        }
 
-def save_profile(username, profile_data):
+def save_user_profile(username, profile_data):
     profile_path = get_user_profile_path(username)
     with open(profile_path, 'w') as f:
         json.dump(profile_data, f)
@@ -135,7 +141,7 @@ def register():
         save_users(users)
         
         # Create initial profile
-        save_profile(username, {
+        save_user_profile(username, {
             'name': username,
             'description': '',
             'picture': None,
@@ -180,7 +186,7 @@ def index():
 @login_required
 def profile():
     username = session['user']
-    profile_data = load_profile(username)
+    profile_data = load_user_profile(username)
     return render_template('profile.html', profile=profile_data, songs=profile_data.get('songs', []))
 
 @app.route('/update_profile_picture', methods=['POST'])
@@ -202,10 +208,10 @@ def update_profile_picture():
             file.save(filepath)
             
             # Update profile data
-            profile_data = load_profile(username)
+            profile_data = load_user_profile(username)
             picture_url = f'/static/profile_pictures/{username}/{filename}'
             profile_data['picture'] = picture_url
-            save_profile(username, profile_data)
+            save_user_profile(username, profile_data)
             
             return jsonify({
                 'success': True,
@@ -222,9 +228,9 @@ def update_name():
     data = request.get_json()
     if 'name' in data:
         username = session['user']
-        profile_data = load_profile(username)
+        profile_data = load_user_profile(username)
         profile_data['name'] = data['name']
-        save_profile(username, profile_data)
+        save_user_profile(username, profile_data)
         return jsonify({'success': True})
     return jsonify({'success': False, 'error': 'No name provided'}), 400
 
@@ -249,7 +255,7 @@ def add_song():
             # Verify the file is a valid MIDI file
             mid = mido.MidiFile(filepath)
             
-            profile_data = load_profile(username)
+            profile_data = load_user_profile(username)
             song_data = {
                 'id': str(len(profile_data.get('songs', [])) + 1),
                 'name': filename,
@@ -262,7 +268,7 @@ def add_song():
             if 'songs' not in profile_data:
                 profile_data['songs'] = []
             profile_data['songs'].append(song_data)
-            save_profile(username, profile_data)
+            save_user_profile(username, profile_data)
             
             return jsonify({'success': True})
         except Exception as e:
@@ -276,7 +282,7 @@ def add_song():
 @login_required
 def delete_song(song_id):
     username = session['user']
-    profile_data = load_profile(username)
+    profile_data = load_user_profile(username)
     songs = profile_data.get('songs', [])
     
     for song in songs:
@@ -287,7 +293,7 @@ def delete_song(song_id):
             # Remove from profile data
             songs.remove(song)
             profile_data['songs'] = songs
-            save_profile(username, profile_data)
+            save_user_profile(username, profile_data)
             return jsonify({'success': True})
     
     return jsonify({'error': 'Song not found'}), 404
@@ -296,7 +302,7 @@ def delete_song(song_id):
 @login_required
 def convert_song(song_id):
     username = session['user']
-    profile_data = load_profile(username)
+    profile_data = load_user_profile(username)
     songs = profile_data.get('songs', [])
     
     for song in songs:
@@ -328,52 +334,57 @@ def convert_song(song_id):
 @app.route('/update_background', methods=['POST'])
 @login_required
 def update_background():
-    username = session['user']
-    profile_data = load_profile(username)
-    
-    # Handle color update
-    if request.is_json:
-        data = request.get_json()
-        if 'color' in data:
-            profile_data['background_color'] = data['color']
-            save_profile(username, profile_data)
-            return jsonify({'success': True})
-    
-    # Handle image update
-    if 'image' in request.files:
-        file = request.files['image']
-        if file and file.filename != '':
-            try:
-                # Ensure the file is an allowed type
-                if not allowed_file(file.filename):
-                    return jsonify({'success': False, 'error': 'Invalid file type'})
+    """Update user's background settings"""
+    try:
+        username = session['user']
+        profile = load_user_profile(username)
+        
+        # Handle background color
+        if 'color' in request.form:
+            profile['background_color'] = request.form['color']
+        
+        # Handle background image
+        if 'image' in request.files:
+            file = request.files['image']
+            if file and allowed_file(file.filename):
+                # Create user's pictures directory if it doesn't exist
+                pictures_dir = os.path.join(app.config['UPLOAD_FOLDER'], username, 'pictures')
+                os.makedirs(pictures_dir, exist_ok=True)
                 
-                # Create user's pictures folder if it doesn't exist
-                user_pictures_folder = get_user_pictures_folder(username)
-                os.makedirs(user_pictures_folder, exist_ok=True)
+                # Save the image
+                filename = secure_filename(file.filename)
+                file_path = os.path.join(pictures_dir, filename)
+                file.save(file_path)
                 
-                # Save the file with a unique name
-                filename = secure_filename(f'bg_{file.filename}')
-                filepath = os.path.join(user_pictures_folder, filename)
-                file.save(filepath)
-                
-                # Update profile data with the new background image path
-                image_url = f'/static/profile_pictures/{username}/{filename}'
-                profile_data['background_image'] = image_url
-                save_profile(username, profile_data)
-                
-                print(f"Background image saved: {filepath}")  # Debug log
-                print(f"Image URL: {image_url}")  # Debug log
-                
-                return jsonify({
-                    'success': True,
-                    'image_url': image_url
-                })
-            except Exception as e:
-                print(f"Error saving background image: {str(e)}")  # Debug log
-                return jsonify({'success': False, 'error': str(e)})
-    
-    return jsonify({'success': False, 'error': 'No image file provided'})
+                # Update profile with relative path
+                profile['background_image'] = f'/static/uploads/{username}/pictures/{filename}'
+        
+        # Save updated profile
+        save_user_profile(username, profile)
+        
+        return jsonify({
+            'success': True,
+            'background_color': profile['background_color'],
+            'background_image': profile['background_image']
+        })
+    except Exception as e:
+        app.logger.error(f"Error updating background: {str(e)}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@app.route('/get_background', methods=['GET'])
+@login_required
+def get_background():
+    """Get user's background settings"""
+    try:
+        username = session['user']
+        profile = load_user_profile(username)
+        return jsonify({
+            'background_color': profile.get('background_color', '#1f2937'),
+            'background_image': profile.get('background_image')
+        })
+    except Exception as e:
+        app.logger.error(f"Error getting background: {str(e)}")
+        return jsonify({'success': False, 'error': str(e)}), 500
 
 @app.route('/upload', methods=['POST'])
 def upload_file():

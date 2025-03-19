@@ -188,24 +188,25 @@ function updateBackground() {
 
 // Background Image Update
 function updateBackgroundImage() {
-    const file = document.getElementById('bg-image').files[0];
+    const fileInput = document.getElementById('bg-image');
+    const file = fileInput.files[0];
+    
     if (!file) {
-        alert('Please select an image file first');
+        alert('Please select an image file');
         return;
     }
-
-    // Check file type
-    const allowedTypes = ['image/jpeg', 'image/png', 'image/gif'];
-    if (!allowedTypes.includes(file.type)) {
+    
+    // Validate file type
+    if (!file.type.match('image.*')) {
         alert('Please select a valid image file (JPEG, PNG, or GIF)');
         return;
     }
-
+    
     const formData = new FormData();
     formData.append('image', file);
     
-    // Show loading state
-    const uploadButton = document.querySelector('button[onclick="updateBackgroundImage()"]');
+    // Disable the upload button and show loading state
+    const uploadButton = fileInput.nextElementSibling;
     const originalText = uploadButton.textContent;
     uploadButton.textContent = 'Uploading...';
     uploadButton.disabled = true;
@@ -217,26 +218,25 @@ function updateBackgroundImage() {
     .then(response => response.json())
     .then(data => {
         if (data.success) {
-            // Apply the background image immediately
-            document.body.style.backgroundImage = `url(${data.image_url})`;
+            // Apply the new background image
+            document.body.style.backgroundImage = `url(${data.background_image})`;
             document.body.style.backgroundSize = 'cover';
             document.body.style.backgroundPosition = 'center';
             document.body.style.backgroundRepeat = 'no-repeat';
             document.body.style.backgroundAttachment = 'fixed';
-            localStorage.setItem('backgroundImage', data.image_url);
-            alert('Background image updated successfully!');
         } else {
-            alert(data.error || 'Failed to update background image');
+            alert('Error uploading image: ' + (data.error || 'Unknown error'));
         }
     })
     .catch(error => {
         console.error('Error:', error);
-        alert('Error updating background image. Please try again.');
+        alert('Error uploading image. Please try again.');
     })
     .finally(() => {
-        // Reset button state
+        // Reset the upload button state
         uploadButton.textContent = originalText;
         uploadButton.disabled = false;
+        fileInput.value = ''; // Clear the file input
     });
 }
 

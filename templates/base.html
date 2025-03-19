@@ -64,25 +64,27 @@
     </main>
 
     <script>
-        // Load saved background settings
+        // Load user's background settings
         document.addEventListener('DOMContentLoaded', function() {
-            const savedColor = localStorage.getItem('backgroundColor');
-            const savedImage = localStorage.getItem('backgroundImage');
-            
-            if (savedColor) {
-                document.body.style.backgroundColor = savedColor;
-                if (document.getElementById('bgColor')) {
-                    document.getElementById('bgColor').value = savedColor;
-                }
-            }
-            
-            if (savedImage) {
-                document.body.style.backgroundImage = `url(${savedImage})`;
-                document.body.style.backgroundSize = 'cover';
-                document.body.style.backgroundPosition = 'center';
-                document.body.style.backgroundRepeat = 'no-repeat';
-                document.body.style.backgroundAttachment = 'fixed';
-            }
+            fetch('/get_background')
+                .then(response => response.json())
+                .then(data => {
+                    if (data.background_color) {
+                        document.body.style.backgroundColor = data.background_color;
+                        if (document.getElementById('bgColor')) {
+                            document.getElementById('bgColor').value = data.background_color;
+                        }
+                    }
+                    
+                    if (data.background_image) {
+                        document.body.style.backgroundImage = `url(${data.background_image})`;
+                        document.body.style.backgroundSize = 'cover';
+                        document.body.style.backgroundPosition = 'center';
+                        document.body.style.backgroundRepeat = 'no-repeat';
+                        document.body.style.backgroundAttachment = 'fixed';
+                    }
+                })
+                .catch(error => console.error('Error loading background settings:', error));
         });
 
         // Handle background color change
@@ -90,7 +92,16 @@
             document.getElementById('bgColor').addEventListener('input', function(e) {
                 const color = e.target.value;
                 document.body.style.backgroundColor = color;
-                localStorage.setItem('backgroundColor', color);
+                
+                // Send update to server
+                const formData = new FormData();
+                formData.append('color', color);
+                
+                fetch('/update_background', {
+                    method: 'POST',
+                    body: formData
+                })
+                .catch(error => console.error('Error updating background color:', error));
             });
         }
     </script>
