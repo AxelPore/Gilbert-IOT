@@ -1,4 +1,4 @@
-from flask import Flask, render_template, request, jsonify
+from flask import Flask, render_template, request, jsonify, send_file
 import mido
 import os
 from werkzeug.utils import secure_filename
@@ -9,12 +9,15 @@ import sys
 app = Flask(__name__)
 app.config['UPLOAD_FOLDER'] = 'uploads'
 app.config['PROFILE_FOLDER'] = 'static/profiles'
+app.config['PROFILE_PICTURES_FOLDER'] = 'static/profile_pictures'
+app.config['ALLOWED_EXTENSIONS'] = {'mid', 'png', 'jpg', 'jpeg'}
 # Increase max file size to 500MB
 app.config['MAX_CONTENT_LENGTH'] = 500 * 1024 * 1024  # 500MB max file size
 
 # Ensure required folders exist
 os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
 os.makedirs(app.config['PROFILE_FOLDER'], exist_ok=True)
+os.makedirs(app.config['PROFILE_PICTURES_FOLDER'], exist_ok=True)
 
 # Load profile data
 def load_profile():
@@ -65,24 +68,42 @@ def profile():
 @app.route('/update_profile_picture', methods=['POST'])
 def update_profile_picture():
     if 'picture' not in request.files:
-        return jsonify({'error': 'No file part'}), 400
+        return jsonify({'success': False, 'error': 'No file uploaded'})
     
     file = request.files['picture']
     if file.filename == '':
-        return jsonify({'error': 'No selected file'}), 400
+        return jsonify({'success': False, 'error': 'No file selected'})
     
-    if file:
-        filename = secure_filename(file.filename)
-        filepath = os.path.join(app.config['PROFILE_FOLDER'], filename)
-        file.save(filepath)
-        
+    if file and allowed_file(file.filename):
+        try:
+            filename = secure_filename(file.filename)
+            filepath = os.path.join(app.config['PROFILE_PICTURES_FOLDER'], filename)
+            file.save(filepath)
+            
+            # Update profile data
+            profile_data = load_profile()
+            picture_url = f'/static/profile_pictures/{filename}'
+            profile_data['picture'] = picture_url
+            save_profile(profile_data)
+            
+            return jsonify({
+                'success': True,
+                'picture_url': picture_url
+            })
+        except Exception as e:
+            return jsonify({'success': False, 'error': str(e)})
+    
+    return jsonify({'success': False, 'error': 'Invalid file type'})
+
+@app.route('/update_name', methods=['POST'])
+def update_name():
+    data = request.get_json()
+    if 'name' in data:
         profile_data = load_profile()
-        profile_data['picture'] = f'/static/profiles/{filename}'
+        profile_data['name'] = data['name']
         save_profile(profile_data)
-        
         return jsonify({'success': True})
-    
-    return jsonify({'error': 'Invalid file type'}), 400
+    return jsonify({'success': False, 'error': 'No name provided'}), 400
 
 @app.route('/add_song', methods=['POST'])
 def add_song():
@@ -143,6 +164,37 @@ def delete_song(song_id):
     
     return jsonify({'error': 'Song not found'}), 404
 
+@app.route('/convert/<int:song_id>')
+def convert_song(song_id):
+    profile_data = load_profile()
+    songs = profile_data.get('songs', [])
+    
+    for song in songs:
+        if song['id'] == song_id:
+            try:
+                mid = mido.MidiFile(song['filepath'])
+                notes = []
+                max_notes = 30000  # Increased note limit
+                
+                for track in mid.tracks:
+                    for msg in track:
+                        if msg.type == 'note_on' and msg.velocity > 0:
+                            note_name = mido.note_name(msg.note)
+                            notes.append(f"Note: {note_name}, Velocity: {msg.velocity}, Time: {msg.time}")
+                            if len(notes) >= max_notes:
+                                notes.append(f"... (showing first {max_notes} notes)")
+                                break
+                
+                return render_template('index.html', notes=notes, file_info={
+                    'name': song['name'],
+                    'size': os.path.getsize(song['filepath']),
+                    'duration': sum(msg.time for msg in mid.tracks[0])
+                })
+            except Exception as e:
+                return render_template('index.html', error=str(e))
+    
+    return render_template('index.html', error='Song not found')
+
 @app.route('/upload', methods=['POST'])
 def upload_file():
     if 'file' not in request.files:
@@ -191,6 +243,9 @@ def upload_file():
             return jsonify({'error': f'Invalid MIDI file: {str(e)}'}), 400
     
     return jsonify({'error': 'Invalid file type. Please upload a .mid file'}), 400
+
+def allowed_file(filename):
+    return '.' in filename and filename.rsplit('.', 1)[1].lower() in app.config['ALLOWED_EXTENSIONS']
 
 if __name__ == '__main__':
     app.run(debug=True) 
