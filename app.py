@@ -47,6 +47,62 @@ def login_required(f):
         return f(*args, **kwargs)
     return decorated_function
 
+def get_user_profile_path(username):
+    return os.path.join(app.config['PROFILE_FOLDER'], f'{username}_profile.json')
+
+def get_user_upload_folder(username):
+    user_upload_folder = os.path.join(app.config['UPLOAD_FOLDER'], username)
+    os.makedirs(user_upload_folder, exist_ok=True)
+    return user_upload_folder
+
+def get_user_pictures_folder(username):
+    user_pictures_folder = os.path.join(app.config['PROFILE_PICTURES_FOLDER'], username)
+    os.makedirs(user_pictures_folder, exist_ok=True)
+    return user_pictures_folder
+
+def load_profile(username):
+    profile_path = get_user_profile_path(username)
+    if os.path.exists(profile_path):
+        with open(profile_path, 'r') as f:
+            return json.load(f)
+    return {
+        'name': username,
+        'description': '',
+        'picture': None,
+        'songs': [],
+        'background_color': '#f3f4f6',
+        'background_image': None
+    }
+
+def save_profile(username, profile_data):
+    profile_path = get_user_profile_path(username)
+    with open(profile_path, 'w') as f:
+        json.dump(profile_data, f)
+
+def midi_to_string_list(midi_file):
+    try:
+        mid = mido.MidiFile(midi_file)
+        notes = []
+        total_notes = 0
+        max_notes = 30000  # Increased limit to 30,000 notes
+        
+        for track in mid.tracks:
+            for msg in track:
+                if total_notes >= max_notes:
+                    notes.append(f"... (Showing first {max_notes} notes)")
+                    return notes
+                    
+                if msg.type == 'note_on' and msg.velocity > 0:
+                    notes.append(f"Note: {msg.note}, Velocity: {msg.velocity}, Time: {msg.time}")
+                    total_notes += 1
+                elif msg.type == 'note_off':
+                    notes.append(f"Note Off: {msg.note}, Time: {msg.time}")
+                    total_notes += 1
+        
+        return notes
+    except Exception as e:
+        raise Exception(f"Error processing MIDI file: {str(e)}")
+
 @app.route('/register', methods=['GET', 'POST'])
 def register():
     if request.method == 'POST':
@@ -78,6 +134,16 @@ def register():
         }
         save_users(users)
         
+        # Create initial profile
+        save_profile(username, {
+            'name': username,
+            'description': '',
+            'picture': None,
+            'songs': [],
+            'background_color': '#f3f4f6',
+            'background_image': None
+        })
+        
         # Log the user in
         session['user'] = username
         return redirect(url_for('index'))
@@ -105,43 +171,6 @@ def logout():
     session.pop('user', None)
     return redirect(url_for('login'))
 
-# Load profile data
-def load_profile():
-    profile_path = os.path.join(app.config['PROFILE_FOLDER'], 'profile.json')
-    if os.path.exists(profile_path):
-        with open(profile_path, 'r') as f:
-            return json.load(f)
-    return {'name': '', 'description': '', 'picture': None, 'songs': []}
-
-def save_profile(profile_data):
-    profile_path = os.path.join(app.config['PROFILE_FOLDER'], 'profile.json')
-    with open(profile_path, 'w') as f:
-        json.dump(profile_data, f)
-
-def midi_to_string_list(midi_file):
-    try:
-        mid = mido.MidiFile(midi_file)
-        notes = []
-        total_notes = 0
-        max_notes = 30000  # Increased limit to 30,000 notes
-        
-        for track in mid.tracks:
-            for msg in track:
-                if total_notes >= max_notes:
-                    notes.append(f"... (Showing first {max_notes} notes)")
-                    return notes
-                    
-                if msg.type == 'note_on' and msg.velocity > 0:
-                    notes.append(f"Note: {msg.note}, Velocity: {msg.velocity}, Time: {msg.time}")
-                    total_notes += 1
-                elif msg.type == 'note_off':
-                    notes.append(f"Note Off: {msg.note}, Time: {msg.time}")
-                    total_notes += 1
-        
-        return notes
-    except Exception as e:
-        raise Exception(f"Error processing MIDI file: {str(e)}")
-
 @app.route('/')
 @login_required
 def index():
@@ -150,10 +179,12 @@ def index():
 @app.route('/profile')
 @login_required
 def profile():
-    profile_data = load_profile()
+    username = session['user']
+    profile_data = load_profile(username)
     return render_template('profile.html', profile=profile_data, songs=profile_data.get('songs', []))
 
 @app.route('/update_profile_picture', methods=['POST'])
+@login_required
 def update_profile_picture():
     if 'picture' not in request.files:
         return jsonify({'success': False, 'error': 'No file uploaded'})
@@ -164,15 +195,17 @@ def update_profile_picture():
     
     if file and allowed_file(file.filename):
         try:
+            username = session['user']
             filename = secure_filename(file.filename)
-            filepath = os.path.join(app.config['PROFILE_PICTURES_FOLDER'], filename)
+            user_pictures_folder = get_user_pictures_folder(username)
+            filepath = os.path.join(user_pictures_folder, filename)
             file.save(filepath)
             
             # Update profile data
-            profile_data = load_profile()
-            picture_url = f'/static/profile_pictures/{filename}'
+            profile_data = load_profile(username)
+            picture_url = f'/static/profile_pictures/{username}/{filename}'
             profile_data['picture'] = picture_url
-            save_profile(profile_data)
+            save_profile(username, profile_data)
             
             return jsonify({
                 'success': True,
@@ -184,16 +217,19 @@ def update_profile_picture():
     return jsonify({'success': False, 'error': 'Invalid file type'})
 
 @app.route('/update_name', methods=['POST'])
+@login_required
 def update_name():
     data = request.get_json()
     if 'name' in data:
-        profile_data = load_profile()
+        username = session['user']
+        profile_data = load_profile(username)
         profile_data['name'] = data['name']
-        save_profile(profile_data)
+        save_profile(username, profile_data)
         return jsonify({'success': True})
     return jsonify({'success': False, 'error': 'No name provided'}), 400
 
 @app.route('/add_song', methods=['POST'])
+@login_required
 def add_song():
     if 'song' not in request.files:
         return jsonify({'error': 'No file part'}), 400
@@ -204,14 +240,16 @@ def add_song():
     
     if file and file.filename.endswith('.mid'):
         try:
+            username = session['user']
             filename = secure_filename(file.filename)
-            filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+            user_upload_folder = get_user_upload_folder(username)
+            filepath = os.path.join(user_upload_folder, filename)
             file.save(filepath)
             
             # Verify the file is a valid MIDI file
             mid = mido.MidiFile(filepath)
             
-            profile_data = load_profile()
+            profile_data = load_profile(username)
             song_data = {
                 'id': str(len(profile_data.get('songs', [])) + 1),
                 'name': filename,
@@ -224,7 +262,7 @@ def add_song():
             if 'songs' not in profile_data:
                 profile_data['songs'] = []
             profile_data['songs'].append(song_data)
-            save_profile(profile_data)
+            save_profile(username, profile_data)
             
             return jsonify({'success': True})
         except Exception as e:
@@ -235,8 +273,10 @@ def add_song():
     return jsonify({'error': 'Invalid file type. Please upload a .mid file'}), 400
 
 @app.route('/delete_song/<song_id>', methods=['DELETE'])
+@login_required
 def delete_song(song_id):
-    profile_data = load_profile()
+    username = session['user']
+    profile_data = load_profile(username)
     songs = profile_data.get('songs', [])
     
     for song in songs:
@@ -247,14 +287,16 @@ def delete_song(song_id):
             # Remove from profile data
             songs.remove(song)
             profile_data['songs'] = songs
-            save_profile(profile_data)
+            save_profile(username, profile_data)
             return jsonify({'success': True})
     
     return jsonify({'error': 'Song not found'}), 404
 
 @app.route('/convert/<int:song_id>')
+@login_required
 def convert_song(song_id):
-    profile_data = load_profile()
+    username = session['user']
+    profile_data = load_profile(username)
     songs = profile_data.get('songs', [])
     
     for song in songs:
@@ -282,6 +324,56 @@ def convert_song(song_id):
                 return render_template('index.html', error=str(e))
     
     return render_template('index.html', error='Song not found')
+
+@app.route('/update_background', methods=['POST'])
+@login_required
+def update_background():
+    username = session['user']
+    profile_data = load_profile(username)
+    
+    # Handle color update
+    if request.is_json:
+        data = request.get_json()
+        if 'color' in data:
+            profile_data['background_color'] = data['color']
+            save_profile(username, profile_data)
+            return jsonify({'success': True})
+    
+    # Handle image update
+    if 'image' in request.files:
+        file = request.files['image']
+        if file and file.filename != '':
+            try:
+                # Ensure the file is an allowed type
+                if not allowed_file(file.filename):
+                    return jsonify({'success': False, 'error': 'Invalid file type'})
+                
+                # Create user's pictures folder if it doesn't exist
+                user_pictures_folder = get_user_pictures_folder(username)
+                os.makedirs(user_pictures_folder, exist_ok=True)
+                
+                # Save the file with a unique name
+                filename = secure_filename(f'bg_{file.filename}')
+                filepath = os.path.join(user_pictures_folder, filename)
+                file.save(filepath)
+                
+                # Update profile data with the new background image path
+                image_url = f'/static/profile_pictures/{username}/{filename}'
+                profile_data['background_image'] = image_url
+                save_profile(username, profile_data)
+                
+                print(f"Background image saved: {filepath}")  # Debug log
+                print(f"Image URL: {image_url}")  # Debug log
+                
+                return jsonify({
+                    'success': True,
+                    'image_url': image_url
+                })
+            except Exception as e:
+                print(f"Error saving background image: {str(e)}")  # Debug log
+                return jsonify({'success': False, 'error': str(e)})
+    
+    return jsonify({'success': False, 'error': 'No image file provided'})
 
 @app.route('/upload', methods=['POST'])
 def upload_file():
