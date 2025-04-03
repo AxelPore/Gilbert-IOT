@@ -64,12 +64,83 @@ void connectToMQTT() {
   }
 }
 
+// Function to play a tone based on the letter
+void playToneForLetter(char letter) {
+  int frequency1 = 0; // Frequency for the first note
+  int frequency2 = 0; // Frequency for the second note
+  int duration = 500; // Default duration for all notes
+  int volume = 128;   // Default volume for all notes
+
+  // Map each letter to two frequencies (including sharp notes)
+  switch (letter) {
+    // Octave 3
+    case 'A': frequency1 = 262; frequency2 = 277; break; // C3 and C#3
+    case 'B': frequency1 = 294; frequency2 = 311; break; // D3 and D#3
+    case 'C': frequency1 = 330; frequency2 = 349; break; // E3 and F3
+    case 'D': frequency1 = 370; frequency2 = 392; break; // F#3 and G3
+    case 'E': frequency1 = 415; frequency2 = 440; break; // G#3 and A3
+    case 'F': frequency1 = 466; frequency2 = 494; break; // A#3 and B3
+    case 'G': frequency1 = 523; frequency2 = 554; break; // C4 and C#4
+
+    // Octave 4
+    case 'H': frequency1 = 587; frequency2 = 622; break; // D4 and D#4
+    case 'I': frequency1 = 659; frequency2 = 698; break; // E4 and F4
+    case 'J': frequency1 = 740; frequency2 = 784; break; // F#4 and G4
+    case 'K': frequency1 = 831; frequency2 = 880; break; // G#4 and A4
+    case 'L': frequency1 = 932; frequency2 = 988; break; // A#4 and B4
+    case 'M': frequency1 = 1047; frequency2 = 1109; break; // C5 and C#5
+    case 'N': frequency1 = 1175; frequency2 = 1245; break; // D5 and D#5
+
+    // Octave 5
+    case 'O': frequency1 = 1319; frequency2 = 1397; break; // E5 and F5
+    case 'P': frequency1 = 1480; frequency2 = 1568; break; // F#5 and G5
+    case 'Q': frequency1 = 1661; frequency2 = 1760; break; // G#5 and A5
+    case 'R': frequency1 = 1865; frequency2 = 1976; break; // A#5 and B5
+    case 'S': frequency1 = 2093; frequency2 = 2217; break; // C6 and C#6
+    case 'T': frequency1 = 2349; frequency2 = 2489; break; // D6 and D#6
+    case 'U': frequency1 = 2637; frequency2 = 2794; break; // E6 and F6
+
+    // Octave 6
+    case 'V': frequency1 = 2960; frequency2 = 3136; break; // F#6 and G6
+    case 'W': frequency1 = 3322; frequency2 = 3520; break; // G#6 and A6
+    case 'X': frequency1 = 3729; frequency2 = 3951; break; // A#6 and B6
+    case 'Y': frequency1 = 4186; frequency2 = 4435; break; // C7 and C#7
+    case 'Z': frequency1 = 4699; frequency2 = 4978; break; // D7 and D#7
+
+    // Silence
+    case '-': 
+      delay(duration); // Silence for the duration
+      return;
+
+    default: return; // Ignore unsupported characters
+  }
+
+  // Play the two tones on separate channels
+  ledcWriteTone(0, frequency1); // Set frequency for channel 0
+  ledcWrite(0, volume);         // Set volume for channel 0
+  ledcWriteTone(1, frequency2); // Set frequency for channel 1
+  ledcWrite(1, volume);         // Set volume for channel 1
+
+  delay(duration);              // Wait for the duration
+
+  // Stop the tones
+  ledcWriteTone(0, 0);          // Stop tone on channel 0
+  ledcWriteTone(1, 0);          // Stop tone on channel 1
+}
+
 // Callback function
 void mqttCallback(char* topic, byte* payload, unsigned int length) {
   Serial.print("Message arrived [");
   Serial.print(topic);
   Serial.print("]: ");
 
+  // If the payload is empty, do nothing
+  if (length == 0) {
+    Serial.println("Empty message received. Ignoring.");
+    return;
+  }
+
+  // Convert payload to a null-terminated string
   char message[length + 1];
   for (unsigned int i = 0; i < length; i++) {
     message[i] = (char)payload[i];
@@ -77,22 +148,17 @@ void mqttCallback(char* topic, byte* payload, unsigned int length) {
   message[length] = '\0';
   Serial.println(message);
 
-  // Handle commands
-  if (strcmp(message, "play") == 0) {
-    client.publish(publishTopic, "Playing melody...");
-  } else if (strcmp(message, "status") == 0) {
-    char statusMsg[50];
-    snprintf(statusMsg, sizeof(statusMsg), "Device is running. IP: %s", WiFi.localIP().toString().c_str());
-    client.publish(publishTopic, statusMsg);
-  } else if (strcmp(message, "A") == 0) {
-    tone(buzzer, 1000, 500); // Play 1kHz tone for 500ms on buzzer
-    client.publish(publishTopic, "Tone A played");
-  } else if (strcmp(message, "B") == 0) {
-    tone(buzzer2, 1500, 500); // Play 1.5kHz tone for 500ms on buzzer2
-    client.publish(publishTopic, "Tone B played");
-  } else if (strcmp(message, "C") == 0) {
-    tone(buzzer3, 2000, 500); // Play 2kHz tone for 500ms on buzzer3
-    client.publish(publishTopic, "Tone C played");
+  // Check if the message starts with '0'
+  if (message[0] != '0') {
+    Serial.println("Message does not start with '0'. Ignoring.");
+    return;
+  }
+
+  // Handle commands (process the rest of the message after '0')
+  for (unsigned int i = 1; i < strlen(message); i++) { // Start from index 1
+    if (isalpha(message[i]) || message[i] == '-') {
+      playToneForLetter(toupper(message[i])); // Play tone for each letter
+    }
   }
 }
 
@@ -104,11 +170,17 @@ void setup() {
   pinMode(buzzer, OUTPUT);
   pinMode(buzzer2, OUTPUT);
   pinMode(buzzer3, OUTPUT);
-  digitalWrite(buzzer, LOW);
-  digitalWrite(buzzer2, LOW);
-  digitalWrite(buzzer3, LOW);
 
-  
+  // Configure PWM channels for ESP32
+  ledcSetup(0, 5000, 8); // Channel 0, 5 kHz, 8-bit resolution
+  ledcAttachPin(buzzer, 0);
+
+  ledcSetup(1, 5000, 8); // Channel 1, 5 kHz, 8-bit resolution
+  ledcAttachPin(buzzer2, 1);
+
+  ledcSetup(2, 5000, 8); // Channel 2, 5 kHz, 8-bit resolution
+  ledcAttachPin(buzzer3, 2);
+
   // Connect to Wi-Fi
   connectToWiFi();
 
@@ -126,7 +198,6 @@ void setup() {
   char startupMsg[50];
   snprintf(startupMsg, sizeof(startupMsg), "Device started. IP: %s", WiFi.localIP().toString().c_str());
   client.publish(publishTopic, startupMsg);
-  
 }
 
 void loop() {
