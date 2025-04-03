@@ -377,7 +377,6 @@ def convert_song(song_id):
 @app.route('/update_background', methods=['POST'])
 @login_required
 def update_background():
-    """Update user's background settings"""
     try:
         username = session['user']
         profile = load_user_profile(username)
@@ -385,26 +384,23 @@ def update_background():
         # Handle background color
         if 'color' in request.form:
             profile['background_color'] = request.form['color']
+            app.logger.debug(f"Updated background color: {profile['background_color']}")
         
         # Handle background image
         if 'image' in request.files:
             file = request.files['image']
             if file and allowed_file(file.filename):
-                # Create user's pictures directory if it doesn't exist
                 pictures_dir = os.path.join(app.config['UPLOAD_FOLDER'], username, 'pictures')
                 os.makedirs(pictures_dir, exist_ok=True)
                 
-                # Save the image
                 filename = secure_filename(file.filename)
                 file_path = os.path.join(pictures_dir, filename)
                 file.save(file_path)
                 
-                # Update profile with relative path
                 profile['background_image'] = f'/static/uploads/{username}/pictures/{filename}'
+                app.logger.debug(f"Updated background image: {profile['background_image']}")
         
-        # Save updated profile
         save_user_profile(username, profile)
-        
         return jsonify({
             'success': True,
             'background_color': profile['background_color'],
@@ -558,4 +554,4 @@ def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in app.config['ALLOWED_EXTENSIONS']
 
 if __name__ == '__main__':
-    app.run(debug=True) 
+    app.run(debug=True)
