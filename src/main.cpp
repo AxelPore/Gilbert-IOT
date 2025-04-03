@@ -84,9 +84,17 @@ void mqttCallback(char* topic, byte* payload, unsigned int length) {
     char statusMsg[50];
     snprintf(statusMsg, sizeof(statusMsg), "Device is running. IP: %s", WiFi.localIP().toString().c_str());
     client.publish(publishTopic, statusMsg);
+  } else if (strcmp(message, "A") == 0) {
+    tone(buzzer, 1000, 500); // Play 1kHz tone for 500ms on buzzer
+    client.publish(publishTopic, "Tone A played");
+  } else if (strcmp(message, "B") == 0) {
+    tone(buzzer2, 1500, 500); // Play 1.5kHz tone for 500ms on buzzer2
+    client.publish(publishTopic, "Tone B played");
+  } else if (strcmp(message, "C") == 0) {
+    tone(buzzer3, 2000, 500); // Play 2kHz tone for 500ms on buzzer3
+    client.publish(publishTopic, "Tone C played");
   }
 }
-
 
 void setup() {
   Serial.begin(115200);
