@@ -3,8 +3,8 @@ import paho.mqtt.client as mqtt
 # Define the MQTT broker details
 broker = "broker.emqx.io"
 port = 1883
-topic = "/gilbert/code"
-message = "ouai c'est greg"
+topic = "/gilbert/iot"
+message = "branch/feature/1.0.0"
 
 # Create a new MQTT client instance
 client = mqtt.Client()
