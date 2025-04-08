@@ -9,7 +9,7 @@ from functools import wraps
 import hashlib
 
 app = Flask(__name__)
-app.config['UPLOAD_FOLDER'] = 'uploads'
+app.config['UPLOAD_FOLDER'] = 'static/uploads'
 app.config['PROFILE_FOLDER'] = 'static/profiles'
 app.config['PROFILE_PICTURES_FOLDER'] = 'static/profile_pictures'
 app.config['ALLOWED_EXTENSIONS'] = {'mid', 'png', 'jpg', 'jpeg'}
