@@ -398,3 +398,25 @@ void loop() {
     lastHeartbeat = millis();
   }
 }
+void playAuClaireDeLaLune() {
+  // Define the tones and durations for the song
+  // Example: {Tone, Duration}
+  ToneData melody[] = {
+      {C3, QUARTER}, {D3, QUARTER}, {E3, QUARTER}, {C3, QUARTER}, // Au claire de la lune
+      {E3, QUARTER}, {F3, QUARTER}, {G3, HALF},                    // Mon ami Pierrot
+      {G3, QUARTER}, {F3, QUARTER}, {E3, QUARTER}, {D3, QUARTER}, // Prete-moi ta plume
+      {C3, WHOLE}                                                 // Pour ecrire un mot
+  };
+
+  int buzzerIndex = 0; // Start with the first buzzer
+
+  // Push the melody into the circular stacks of the buzzers
+  for (const auto& toneData : melody) {
+      buzzerStacks[buzzerIndex].push(toneData);
+      buzzerIndex = (buzzerIndex + 1) % 3; // Rotate between buzzers
+  }
+
+  Serial.println("Melody for 'Au claire de la lune' has been loaded into buzzer stacks.");
+}
+
+void playAuClaireDeLaLune(); // Call the function to load the melody
