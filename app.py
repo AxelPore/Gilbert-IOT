@@ -7,9 +7,10 @@ import json
 import sys
 from functools import wraps
 import hashlib
+import paho.mqtt.client as mqtt
 
 app = Flask(__name__)
-app.config['UPLOAD_FOLDER'] = 'uploads'
+app.config['UPLOAD_FOLDER'] = 'static/uploads'
 app.config['PROFILE_FOLDER'] = 'static/profiles'
 app.config['PROFILE_PICTURES_FOLDER'] = 'static/profile_pictures'
 app.config['ALLOWED_EXTENSIONS'] = {'mid', 'png', 'jpg', 'jpeg'}
@@ -552,6 +553,35 @@ def download_shared_song(song_id):
 
 def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in app.config['ALLOWED_EXTENSIONS']
+
+def sendtomqtt(datamqtt):
+    # Define the MQTT broker details
+    broker = "broker.emqx.io"
+    port = 1883
+    topic = "/gilbert/"
+    message = datamqtt
+
+    # Create a new MQTT client instance
+    client = mqtt.Client()
+
+    # Connect to the MQTT broker
+    client.connect(broker, port, 60)
+
+    # Publish a message to the specified topic
+    client.publish(topic, message)
+
+    # Disconnect from the broker
+    client.disconnect()
+
+    print(f"Message '{message}' sent to topic '{topic}'")
+    
+@app.route('/send_to_mqtt', methods=['POST'])
+def send_to_mqtt():
+    datamqtt = request.form.get('mqtt_data')
+    if datamqtt:
+        sendtomqtt(datamqtt)
+        return redirect(url_for('index'))
+    return 'No data provided', 400
 
 if __name__ == '__main__':
     app.run(debug=True)
