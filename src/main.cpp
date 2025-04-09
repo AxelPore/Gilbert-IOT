@@ -1,16 +1,19 @@
 #include <Arduino.h>
 
+#define MAX_QUEUE_SIZE 10
+#define MAX_STACK_SIZE 10
+
 const int buzzer = 25;
 const int buzzer2 = 32;
 const int buzzer3 = 33;
-
 
 #include <iostream>
 #include <fstream>
 #include <cstdio>
 #include <string>
 #include <vector>
-
+#include <cstring>
+#include <queue>
 
 #ifdef ESP8266
   #include <ESP8266WiFi.h>
@@ -20,208 +23,359 @@ const int buzzer3 = 33;
 
 #include <PubSubClient.h>
 
-// Wi-Fi credentials
+enum class BuzzerState {
+  OFF,
+  ON
+};
+
+enum Tones {
+  C0 = 16,
+  C3 = 262,
+  C3s = 277,
+  D3 = 294,
+  D3s = 311,
+  E3 = 330,
+  E3s = 349,
+  F3 = 370,
+  F3s = 392,
+  G3 = 415,
+  G3s = 440,
+  A3_TONE = 466,
+  A3s = 494,
+  B3 = 523,
+  C4 = 554,
+  C4s = 587,
+  D4 = 622,
+  D4s = 659,
+  E4 = 698,
+  E4s = 740,
+  F4 = 784,
+  F4s = 830,
+  G4 = 880,
+  G4s = 932,
+  A4_TONE = 987,
+  A4s = 1047,
+  B4 = 1175,
+  C5 = 1255,
+  C5s = 1320,
+  D5 = 1397,
+  D5s = 1479,
+  E5 = 1568,
+  E5s = 1661,
+  F5 = 1760,
+  F5s = 1865,
+  G5 = 1976,
+  G5s = 2093,
+  A5_TONE = 2217,
+  A5s = 2349,
+  B5 = 2489
+};
+
+enum durations {
+  ZERO = 100,
+  QUARTER = 250,
+  HALF = 500,
+  WHOLE = 1000,
+  WHOLE_DOTTED = 1250,
+  WHOLE_HALF = 1500,
+  WHOLE_HALF_DOTTED = 1750,
+  TWO_WHOLE = 2000
+};
+
+Tones getToneByLetter(char letter) {
+  switch (letter) {
+    case 'A': return C3;
+    case 'B': return C3s;
+    case 'C': return D3;
+    case 'D': return D3s;
+    case 'E': return E3;
+    case 'F': return E3s;
+    case 'G': return F3;
+    case 'H': return F3s;
+    case 'I': return G3;
+    case 'J': return G3s;
+    case 'K': return A3_TONE;
+    case 'L': return A3s;
+    case 'M': return B3;
+
+    case 'N': return C4;
+    case 'O': return C4s;
+    case 'P': return D4;
+    case 'Q': return D4s;
+    case 'R': return E4;
+    case 'S': return E4s;
+    case 'T': return F4;
+    case 'U': return F4s;
+    case 'V': return G4;
+    case 'W': return G4s;
+    case 'X': return A4_TONE;
+    case 'Y': return A4s;
+    case 'Z': return B4;
+    case '5': return A5_TONE;
+
+    default: return C0; // Default to C0 for unrecognized letters
+  }
+}
+
+durations getDurationByNumber(char number) {
+  switch (number) {
+    case '0': return ZERO;
+    case '1': return QUARTER;
+    case '2': return HALF;
+    case '3': return WHOLE;
+    case '4': return WHOLE_DOTTED;
+    case '5': return WHOLE_HALF;
+    case '6': return WHOLE_HALF_DOTTED;
+    case '7': return TWO_WHOLE;
+    default: return ZERO;
+  }
+}
+
 const char* ssid = "Never gonna give you up";
 const char* password = "n€verG0nnAl€tyoUd0wn";
 
 // MQTT broker details
 const char* mqttServer = "broker.emqx.io";
 const int mqttPort = 1883;
-const char* mqttUser = "Heinrich"; // Optional, if your broker requires authentication
-const char* mqttPassword = ""; // Optional
+
 const char* clientId = "VieGehtEsDirMeinFreund"; // Must be unique on the broker
 
 // Topics
-const char* publishTopic = "/gilbert/IoT";
+const char* publishTopic = "/gilbert/alive";
 const char* subscribeTopic = "/gilbert/#";
 
 WiFiClient espClient;
 PubSubClient client(espClient);
 
+// Define a structure to hold tone and duration
+struct ToneData {
+  int frequency;
+  durations duration;
+};
+
+// Circular stack structure
+struct CircularStack {
+  ToneData stack[MAX_STACK_SIZE];
+  int head = 0; // Points to the next position to write
+  int tail = 0; // Points to the next position to read
+  int size = 0; // Tracks the number of elements in the stack
+
+  // Push a new tone onto the stack
+  void push(ToneData tone) {
+    if (size < MAX_STACK_SIZE) {
+      stack[head] = tone;
+      head = (head + 1) % MAX_STACK_SIZE;
+      size++;
+    } else {
+      Serial.println("Stack full, overwriting oldest tone.");
+      stack[head] = tone;
+      head = (head + 1) % MAX_STACK_SIZE;
+      tail = (tail + 1) % MAX_STACK_SIZE; // Move tail forward to maintain circularity
+    }
+  }
+
+  // Pop a tone from the stack
+  ToneData pop() {
+    if (size > 0) {
+      ToneData tone = stack[tail];
+      tail = (tail + 1) % MAX_STACK_SIZE;
+      size--;
+      return tone;
+    } else {
+      Serial.println("Stack empty, returning default tone.");
+      return {C0, ZERO}; // Return a default tone if the stack is empty
+    }
+  }
+
+  // Check if the stack is empty
+  bool empty() {
+    return size == 0;
+  }
+};
+
+// Circular stacks for each buzzer
+CircularStack buzzerStacks[3];
+
 // Function to connect to Wi-Fi
 void connectToWiFi() {
-  Serial.print("Connecting to Wi-Fi");
-  WiFi.begin(ssid, password);
-  while (WiFi.status() != WL_CONNECTED) {
-    delay(500);
-    Serial.print(".");
-  }
-  Serial.println("\nConnected to Wi-Fi");
-  Serial.print("IP Address: ");
-  Serial.println(WiFi.localIP());
+    Serial.print("Connecting to Wi-Fi...");
+    WiFi.begin(ssid, password);
+    while (WiFi.status() != WL_CONNECTED) {
+        delay(500);
+        Serial.print(".");
+    }
+    Serial.println("\nConnected to Wi-Fi");
+    Serial.print("IP Address: ");
+    Serial.println(WiFi.localIP());
 }
 
 // Function to connect to MQTT broker
 void connectToMQTT() {
+  client.setServer(mqttServer, mqttPort);
   Serial.print("Connecting to MQTT broker");
   while (!client.connected()) {
-    if (client.connect(clientId, mqttUser, mqttPassword)) {
+    if (client.connect(clientId)) {
       Serial.println("\nConnected to MQTT broker");
     } else {
       Serial.print(".");
-      delay(1000);
     }
   }
 }
 
-// Function to play a tone based on the letter
-void playToneForLetter(char letter) {
-  int frequency1 = 0; // Frequency for the first note
-  int frequency2 = 0; // Frequency for the second note
-  int duration = 500; // Default duration for all notes
-  int volume = 128;   // Default volume for all notes
+// Function to process the circular stack for a specific buzzer
+void processBuzzerStack(int channel) {
+  static unsigned long lastToneTime[3] = {0, 0, 0}; // Track the last tone time for each channel
+  static unsigned long lastEmptyMessageTime[3] = {0, 0, 0}; // Track the last time the empty message was sent
 
-  // Map each letter to two frequencies (including sharp notes)
-  switch (letter) {
-    // Octave 3
-    case 'A': frequency1 = 262; frequency2 = 277; break; // C3 and C#3
-    case 'B': frequency1 = 294; frequency2 = 311; break; // D3 and D#3
-    case 'C': frequency1 = 330; frequency2 = 349; break; // E3 and F3
-    case 'D': frequency1 = 370; frequency2 = 392; break; // F#3 and G3
-    case 'E': frequency1 = 415; frequency2 = 440; break; // G#3 and A3
-    case 'F': frequency1 = 466; frequency2 = 494; break; // A#3 and B3
-    case 'G': frequency1 = 523; frequency2 = 554; break; // C4 and C#4
+  if (!buzzerStacks[channel].empty()) {
+    ToneData currentTone = buzzerStacks[channel].pop();
+    Serial.print("Processing buzzer ");
+    Serial.print(channel);
+    Serial.print(": Frequency = ");
+    Serial.print(currentTone.frequency);
+    Serial.print(", Duration = ");
+    Serial.println(currentTone.duration);
 
-    // Octave 4
-    case 'H': frequency1 = 587; frequency2 = 622; break; // D4 and D#4
-    case 'I': frequency1 = 659; frequency2 = 698; break; // E4 and F4
-    case 'J': frequency1 = 740; frequency2 = 784; break; // F#4 and G4
-    case 'K': frequency1 = 831; frequency2 = 880; break; // G#4 and A4
-    case 'L': frequency1 = 932; frequency2 = 988; break; // A#4 and B4
-    case 'M': frequency1 = 1047; frequency2 = 1109; break; // C5 and C#5
-    case 'N': frequency1 = 1175; frequency2 = 1245; break; // D5 and D#5
+    if (millis() - lastToneTime[channel] >= currentTone.duration) {
+        ledcWriteTone(channel, 0);
+        lastToneTime[channel] = millis();
+        Serial.println("Tone finished, moving to next.");
+    } else {
+        ledcWriteTone(channel, currentTone.frequency);
+        ledcWrite(channel, 100); // Set volume
+        Serial.println("Playing tone...");
+    }
+  } else {
+    ledcWriteTone(channel, 0);
 
-    // Octave 5
-    case 'O': frequency1 = 1319; frequency2 = 1397; break; // E5 and F5
-    case 'P': frequency1 = 1480; frequency2 = 1568; break; // F#5 and G5
-    case 'Q': frequency1 = 1661; frequency2 = 1760; break; // G#5 and A5
-    case 'R': frequency1 = 1865; frequency2 = 1976; break; // A#5 and B5
-    case 'S': frequency1 = 2093; frequency2 = 2217; break; // C6 and C#6
-    case 'T': frequency1 = 2349; frequency2 = 2489; break; // D6 and D#6
-    case 'U': frequency1 = 2637; frequency2 = 2794; break; // E6 and F6
-
-    // Octave 6
-    case 'V': frequency1 = 2960; frequency2 = 3136; break; // F#6 and G6
-    case 'W': frequency1 = 3322; frequency2 = 3520; break; // G#6 and A6
-    case 'X': frequency1 = 3729; frequency2 = 3951; break; // A#6 and B6
-    case 'Y': frequency1 = 4186; frequency2 = 4435; break; // C7 and C#7
-    case 'Z': frequency1 = 4699; frequency2 = 4978; break; // D7 and D#7
-
-    // Silence
-    case '-': 
-      delay(duration); // Silence for the duration
-      return;
-
-    default: return; // Ignore unsupported characters
+    // Check if 10 seconds have passed since the last empty message
+    if (millis() - lastEmptyMessageTime[channel] >= 10000) {
+        Serial.print("Buzzer ");
+        Serial.print(channel);
+        Serial.println(" stack is empty.");
+        lastEmptyMessageTime[channel] = millis(); // Update the timestamp
+    }
   }
-
-  // Play the two tones on separate channels
-  ledcWriteTone(0, frequency1); // Set frequency for channel 0
-  ledcWrite(0, volume);         // Set volume for channel 0
-  ledcWriteTone(1, frequency2); // Set frequency for channel 1
-  ledcWrite(1, volume);         // Set volume for channel 1
-
-  delay(duration);              // Wait for the duration
-
-  // Stop the tones
-  ledcWriteTone(0, 0);          // Stop tone on channel 0
-  ledcWriteTone(1, 0);          // Stop tone on channel 1
 }
 
-// Callback function
+// Updated MQTT callback function
 void mqttCallback(char* topic, byte* payload, unsigned int length) {
   Serial.print("Message arrived [");
   Serial.print(topic);
   Serial.print("]: ");
 
-  // If the payload is empty, do nothing
   if (length == 0) {
     Serial.println("Empty message received. Ignoring.");
     return;
   }
 
-  // Convert payload to a null-terminated string
   char message[length + 1];
   for (unsigned int i = 0; i < length; i++) {
     message[i] = (char)payload[i];
   }
-  message[length] = '\0';
+  message[length] = '\0'; // Null-terminate the message
   Serial.println(message);
 
-  // Check if the message starts with '0'
-  if (message[0] != '0') {
-    Serial.println("Message does not start with '0'. Ignoring.");
-    return;
-  }
+  // Split the message by underscores
+  char* token = strtok(message, "_");
+  int buzzerIndex = 0;
 
-  // Handle commands (process the rest of the message after '0')
-  for (unsigned int i = 1; i < strlen(message); i++) { // Start from index 1
-    if (isalpha(message[i]) || message[i] == '-') {
-      playToneForLetter(toupper(message[i])); // Play tone for each letter
+  while (token != nullptr && buzzerIndex < 3) {
+    Serial.print("Processing token for buzzer ");
+    Serial.println(buzzerIndex);
+
+    // Process the token in chunks of two characters
+    for (unsigned int i = 0; i < strlen(token); i += 2) {
+      if (i + 1 < strlen(token)) { // Ensure there are at least two characters left
+        char letter = token[i];
+        char number = token[i + 1];
+
+        int frequency = getToneByLetter(toupper(letter));
+        durations duration = getDurationByNumber(number);
+
+        if (frequency != C0 && duration != ZERO) { // Validate the token
+          Serial.print("Adding to buzzer ");
+          Serial.print(buzzerIndex);
+          Serial.print(": Frequency = ");
+          Serial.print(frequency);
+          Serial.print(", Duration = ");
+          Serial.println(duration);
+
+          // Push the tone onto the circular stack
+          buzzerStacks[buzzerIndex].push({frequency, duration});
+        } else {
+          Serial.print("Invalid token: ");
+          Serial.print(letter);
+          Serial.print(number);
+          Serial.println(". Skipping.");
+        }
+      } else {
+        Serial.print("Incomplete token at the end of the message: ");
+        Serial.println(token[i]);
+      }
     }
+
+    // Move to the next buzzer
+    buzzerIndex++;
+    token = strtok(nullptr, "_");
   }
 }
 
 void setup() {
-  Serial.begin(115200);
-  delay(1000); // Give some time for serial to initialize
+    Serial.begin(115200);
+    delay(1000);
 
-  // Set up buzzer pins
-  pinMode(buzzer, OUTPUT);
-  pinMode(buzzer2, OUTPUT);
-  pinMode(buzzer3, OUTPUT);
+    pinMode(buzzer, OUTPUT);
+    pinMode(buzzer2, OUTPUT);
+    pinMode(buzzer3, OUTPUT);
 
-  // Configure PWM channels for ESP32
-  ledcSetup(0, 5000, 8); // Channel 0, 5 kHz, 8-bit resolution
-  ledcAttachPin(buzzer, 0);
+    Serial.println("Configuring PWM channels...");
+    ledcSetup(0, 5000, 8); // Channel 0, 5 kHz, 8-bit resolution
+    ledcAttachPin(buzzer, 0);
 
-  ledcSetup(1, 5000, 8); // Channel 1, 5 kHz, 8-bit resolution
-  ledcAttachPin(buzzer2, 1);
+    ledcSetup(1, 5000, 8); // Channel 1, 5 kHz, 8-bit resolution
+    ledcAttachPin(buzzer2, 1);
 
-  ledcSetup(2, 5000, 8); // Channel 2, 5 kHz, 8-bit resolution
-  ledcAttachPin(buzzer3, 2);
+    ledcSetup(2, 5000, 8); // Channel 2, 5 kHz, 8-bit resolution
+    ledcAttachPin(buzzer3, 2);
+    Serial.println("PWM channels configured.");
 
-  // Connect to Wi-Fi
-  connectToWiFi();
+    unsigned long startTime = millis();
+    Serial.println("Testing buzzer...");
+    ledcWriteTone(0, 440); // Play A4 (440 Hz)
+    while (millis() - startTime < 1000) {
+        // Non-blocking wait
+    }
+    ledcWriteTone(0, 0);   // Stop tone
+    Serial.println("Buzzer test complete.");
 
-  // Set MQTT server and callback
-  client.setServer(mqttServer, mqttPort);
-  client.setCallback(mqttCallback);
+    connectToWiFi();
+    connectToMQTT();
+    client.publish("test/topic", "Hello, MQTT!");
 
-  // Connect to MQTT broker
-  connectToMQTT();
-
-  // Subscribe to topic
-  client.subscribe(subscribeTopic);
-
-  // Send initial status message
-  char startupMsg[50];
-  snprintf(startupMsg, sizeof(startupMsg), "Device started. IP: %s", WiFi.localIP().toString().c_str());
-  client.publish(publishTopic, startupMsg);
+    client.setCallback(mqttCallback);
+    if (client.subscribe(subscribeTopic)) {
+        Serial.println("Subscribed to topic: " + String(subscribeTopic));
+    } else {
+        Serial.println("Failed to subscribe to topic: " + String(subscribeTopic));
+    }
 }
 
 void loop() {
-
-  client.loop();
-  delay(10); // Small delay to prevent watchdog issues
-
   if (!client.connected()) {
     connectToMQTT();
   }
-  
+  client.loop();
+
+  // Process one buzzer's stack per iteration
+  static int currentBuzzer = 0; // Track which buzzer to process
+  processBuzzerStack(currentBuzzer);
+  currentBuzzer = (currentBuzzer + 1) % 3; // Move to the next buzzer
+
   // Send heartbeat message every 30 seconds
   static unsigned long lastHeartbeat = 0;
   if (millis() - lastHeartbeat > 30000) {
     client.publish(publishTopic, "Device is alive");
     lastHeartbeat = millis();
   }
-  
-  // Check for incoming messages
-  if (Serial.available() > 0) {
-    String message = Serial.readStringUntil('\n');
-    message.trim();
-    client.publish(publishTopic, message.c_str());
-  }
-  
-  delay(10); // Small delay to prevent bouncing
 }
