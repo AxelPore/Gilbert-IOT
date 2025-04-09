@@ -29,6 +29,7 @@ enum class BuzzerState {
 };
 
 enum Tones {
+  REST = 0,  // Silent note/rest
   C0 = 16,
   C3 = 262,
   C3s = 277,
@@ -111,7 +112,7 @@ Tones getToneByLetter(char letter) {
     case 'X': return A4_TONE;
     case 'Y': return A4s;
     case 'Z': return B4;
-    case '5': return A5_TONE;
+    case '#': return REST;  // Space character represents silent note
 
     default: return C0; // Default to C0 for unrecognized letters
   }
@@ -224,27 +225,39 @@ void connectToMQTT() {
 
 // Function to process the circular stack for a specific buzzer
 void processBuzzerStack(int channel) {
-  static unsigned long lastToneTime[3] = {0, 0, 0}; // Track the last tone time for each channel
-  static unsigned long lastEmptyMessageTime[3] = {0, 0, 0}; // Track the last time the empty message was sent
+  static unsigned long lastToneStart[3] = {0, 0, 0}; // When current tone started
+  static ToneData currentTone[3]; // Current tone being played
+  static bool isPlaying[3] = {false, false, false}; // Track if tone is playing
+  static unsigned long lastEmptyMessageTime[3] = {0, 0, 0};
 
-  if (!buzzerStacks[channel].empty()) {
-    ToneData currentTone = buzzerStacks[channel].pop();
+    if (isPlaying[channel]) {
+      // Check if current tone duration has elapsed
+      if (millis() - lastToneStart[channel] >= currentTone[channel].duration) {
+        ledcWriteTone(channel, 0); // Stop tone
+        isPlaying[channel] = false;
+        Serial.println("Tone finished");
+      } else if (currentTone[channel].frequency == REST) {
+        // For silent notes, just wait the duration without playing
+        if (millis() - lastToneStart[channel] >= currentTone[channel].duration) {
+          isPlaying[channel] = false;
+          Serial.println("Rest finished");
+        }
+      }
+  } else if (!buzzerStacks[channel].empty()) {
+    // Get new tone to play
+    currentTone[channel] = buzzerStacks[channel].pop();
     Serial.print("Processing buzzer ");
     Serial.print(channel);
     Serial.print(": Frequency = ");
-    Serial.print(currentTone.frequency);
+    Serial.print(currentTone[channel].frequency);
     Serial.print(", Duration = ");
-    Serial.println(currentTone.duration);
+    Serial.println(currentTone[channel].duration);
 
-    if (millis() - lastToneTime[channel] >= currentTone.duration) {
-        ledcWriteTone(channel, 0);
-        lastToneTime[channel] = millis();
-        Serial.println("Tone finished, moving to next.");
-    } else {
-        ledcWriteTone(channel, currentTone.frequency);
-        ledcWrite(channel, 100); // Set volume
-        Serial.println("Playing tone...");
-    }
+    ledcWriteTone(channel, currentTone[channel].frequency);
+    ledcWrite(channel, 100); // Set volume
+    lastToneStart[channel] = millis();
+    isPlaying[channel] = true;
+    Serial.println("Playing tone...");
   } else {
     ledcWriteTone(channel, 0);
 
@@ -266,6 +279,12 @@ void mqttCallback(char* topic, byte* payload, unsigned int length) {
 
   if (length == 0) {
     Serial.println("Empty message received. Ignoring.");
+    return;
+  }
+
+  // Check for "Device is alive" message and ignore it
+  if (strncmp((const char*)payload, "Device is alive", length) == 0) {
+    Serial.println("Heartbeat message received. Ignoring.");
     return;
   }
 
