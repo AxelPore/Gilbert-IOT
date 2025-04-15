@@ -271,7 +271,7 @@ void pairDeviceWithServer() {
     if (WiFi.status() == WL_CONNECTED) {
         HTTPClient http;
         // Replace "YOUR_FLASK_SERVER_IP" with the actual IP address or domain of your Flask server
-        String serverUrl = "http://YOUR_FLASK_SERVER_IP:5000/pair_device";
+        String serverUrl = "http://127.0.0.1:5000/pair_device";
         http.begin(serverUrl);
         http.addHeader("Content-Type", "application/json");
 
