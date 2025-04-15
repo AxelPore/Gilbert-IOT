@@ -583,5 +583,23 @@ def send_to_mqtt():
         return redirect(url_for('index'))
     return 'No data provided', 400
 
+from flask import jsonify
+
+@app.route('/pair_device', methods=['POST'])
+def pair_device():
+    data = request.get_json()
+    if not data or 'device_id' not in data:
+        return jsonify({'success': False, 'error': 'Missing device_id'}), 400
+
+    device_id = data['device_id']
+    username = session['user']
+    profile = load_user_profile(username)
+
+    # Store the paired device ID in the user's profile
+    profile['paired_device'] = device_id
+    save_user_profile(username, profile)
+
+    return jsonify({'success': True, 'message': f'Device {device_id} paired with user {username}'}), 200
+
 if __name__ == '__main__':
     app.run(debug=True)
