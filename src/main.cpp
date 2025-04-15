@@ -1,7 +1,7 @@
 #include <Arduino.h>
 
-#define MAX_QUEUE_SIZE 10
-#define MAX_STACK_SIZE 10
+#define MAX_QUEUE_SIZE 128
+#define MAX_STACK_SIZE 128
 
 const int buzzer = 25;
 const int buzzer2 = 32;
@@ -22,6 +22,27 @@ const int buzzer3 = 33;
 #endif
 
 #include <PubSubClient.h>
+#include <WebServer.h>
+
+WebServer server(8000);  // Create web server on port 8000
+
+// Forward declaration
+const char* generateSilentNotes(const char* pattern);
+
+// Helper function to generate silent notes matching the pattern of active notes
+const char* generateSilentNotes(const char* pattern) {
+  static char silentNotes[100]; // Static buffer for the generated string
+  int j = 0;
+  
+  for (unsigned int i = 0; i < strlen(pattern); i += 2) {
+    if (i + 1 < strlen(pattern)) {
+      silentNotes[j++] = '#'; // Silent note
+      silentNotes[j++] = pattern[i+1]; // Keep original duration
+    }
+  }
+  silentNotes[j] = '\0';
+  return silentNotes;
+}
 
 enum class BuzzerState {
   OFF,
@@ -148,6 +169,31 @@ const char* subscribeTopic = "/gilbert/#";
 WiFiClient espClient;
 PubSubClient client(espClient);
 
+int difficulty = 1;  // Global variable to store difficulty
+
+void handleSetDifficulty() {
+  if (server.hasArg("difficulty")) {
+    difficulty = server.arg("difficulty").toInt();
+    server.send(200, "text/plain", "Difficulty set to " + String(difficulty));
+  } else {
+    server.send(400, "text/plain", "Missing difficulty parameter");
+  }
+}
+
+void handleRoot() {
+  String html = "<html><body>";
+  html += "<h1>Modifier la difficulte du jeu Simon</h1>";
+  html += "<form action=\"/setDifficulty\" method=\"POST\">";
+  html += "<label for=\"difficulty\">Difficulte : </label>";
+  html += "<input type=\"number\" id=\"difficulty\" name=\"difficulty\" min=\"1\" max=\"10\" value=\"";
+  html += String(difficulty);
+  html += "\">";
+  html += "<input type=\"submit\" value=\"Changer la difficulte\">";
+  html += "</form>";
+  html += "</body></html>";
+  server.send(200, "text/html", html);
+}
+
 // Define a structure to hold tone and duration
 struct ToneData {
   int frequency;
@@ -198,6 +244,8 @@ struct CircularStack {
 CircularStack buzzerStacks[3];
 
 // Function to connect to Wi-Fi
+#include <HTTPClient.h>
+
 void connectToWiFi() {
     Serial.print("Connecting to Wi-Fi...");
     WiFi.begin(ssid, password);
@@ -208,6 +256,52 @@ void connectToWiFi() {
     Serial.println("\nConnected to Wi-Fi");
     Serial.print("IP Address: ");
     Serial.println(WiFi.localIP());
+
+    // After connecting to Wi-Fi, attempt to pair device with server
+    pairDeviceWithServer();
+}
+
+// Function to get device MAC address as device ID
+String getDeviceID() {
+    return WiFi.macAddress();
+}
+
+// Function to pair device with Flask server
+void pairDeviceWithServer() {
+    if (WiFi.status() == WL_CONNECTED) {
+        HTTPClient http;
+        // Replace "YOUR_FLASK_SERVER_IP" with the actual IP address or domain of your Flask server
+        String serverUrl = "http://YOUR_FLASK_SERVER_IP:5000/pair_device";
+        http.begin(serverUrl);
+        http.addHeader("Content-Type", "application/json");
+
+        // Prepare JSON payload with device_id and user credentials
+        // For simplicity, using username and password here; in production use token-based auth
+        String username = "your_username"; // Replace with actual username or get dynamically
+        String password = "your_password"; // Replace with actual password or get dynamically
+        String deviceID = getDeviceID();
+
+        String payload = "{\"device_id\":\"" + deviceID + "\"}";
+
+        // Add basic auth header (optional, depending on server auth)
+        // String authHeader = "Basic " + base64::encode(username + ":" + password);
+        // http.addHeader("Authorization", authHeader);
+
+        int httpResponseCode = http.POST(payload);
+
+        if (httpResponseCode > 0) {
+            String response = http.getString();
+            Serial.print("Pairing response: ");
+            Serial.println(response);
+        } else {
+            Serial.print("Error on sending POST: ");
+            Serial.println(httpResponseCode);
+        }
+
+        http.end();
+    } else {
+        Serial.println("WiFi not connected, cannot pair device");
+    }
 }
 
 // Function to connect to MQTT broker
@@ -254,7 +348,7 @@ void processBuzzerStack(int channel) {
     Serial.println(currentTone[channel].duration);
 
     ledcWriteTone(channel, currentTone[channel].frequency);
-    ledcWrite(channel, 100); // Set volume
+    ledcWrite(channel, 160); // Set volume
     lastToneStart[channel] = millis();
     isPlaying[channel] = true;
     Serial.println("Playing tone...");
@@ -296,23 +390,36 @@ void mqttCallback(char* topic, byte* payload, unsigned int length) {
   Serial.println(message);
 
   // Split the message by underscores
+  char* tokens[3] = {nullptr, nullptr, nullptr};
+  int numTokens = 0;
+  
+  // First count how many parts we have
   char* token = strtok(message, "_");
-  int buzzerIndex = 0;
+  while (token != nullptr && numTokens < 3) {
+    tokens[numTokens++] = token;
+    token = strtok(nullptr, "_");
+  }
 
-  while (token != nullptr && buzzerIndex < 3) {
+  // Process each token
+  for (int buzzerIndex = 0; buzzerIndex < 3; buzzerIndex++) {
     Serial.print("Processing token for buzzer ");
     Serial.println(buzzerIndex);
 
+    // If we have fewer tokens than buzzers, generate silent notes for remaining buzzers
+    const char* toProcess = (buzzerIndex < numTokens) ? 
+                            tokens[buzzerIndex] : 
+                            generateSilentNotes(tokens[0]); // Generate silent notes matching first part
+
     // Process the token in chunks of two characters
-    for (unsigned int i = 0; i < strlen(token); i += 2) {
-      if (i + 1 < strlen(token)) { // Ensure there are at least two characters left
-        char letter = token[i];
-        char number = token[i + 1];
+    for (unsigned int i = 0; i < strlen(toProcess); i += 2) {
+        if (i + 1 < strlen(toProcess)) { // Ensure there are at least two characters left
+          char letter = toProcess[i];
+          char number = toProcess[i + 1];
 
         int frequency = getToneByLetter(toupper(letter));
         durations duration = getDurationByNumber(number);
 
-        if (frequency != C0 && duration != ZERO) { // Validate the token
+        if (frequency != C0) { // Validate the token
           Serial.print("Adding to buzzer ");
           Serial.print(buzzerIndex);
           Serial.print(": Frequency = ");
@@ -372,6 +479,13 @@ void setup() {
     connectToMQTT();
     client.publish("test/topic", "Hello, MQTT!");
 
+    server.on("/", HTTP_GET, handleRoot);
+    server.on("/setDifficulty", HTTP_POST, handleSetDifficulty);
+  
+    server.begin();
+    Serial.println("Serveur démarré");
+    Serial.println(WiFi.localIP());
+
     client.setCallback(mqttCallback);
     if (client.subscribe(subscribeTopic)) {
         Serial.println("Subscribed to topic: " + String(subscribeTopic));
@@ -398,25 +512,3 @@ void loop() {
     lastHeartbeat = millis();
   }
 }
-void playAuClaireDeLaLune() {
-  // Define the tones and durations for the song
-  // Example: {Tone, Duration}
-  ToneData melody[] = {
-      {C3, QUARTER}, {D3, QUARTER}, {E3, QUARTER}, {C3, QUARTER}, // Au claire de la lune
-      {E3, QUARTER}, {F3, QUARTER}, {G3, HALF},                    // Mon ami Pierrot
-      {G3, QUARTER}, {F3, QUARTER}, {E3, QUARTER}, {D3, QUARTER}, // Prete-moi ta plume
-      {C3, WHOLE}                                                 // Pour ecrire un mot
-  };
-
-  int buzzerIndex = 0; // Start with the first buzzer
-
-  // Push the melody into the circular stacks of the buzzers
-  for (const auto& toneData : melody) {
-      buzzerStacks[buzzerIndex].push(toneData);
-      buzzerIndex = (buzzerIndex + 1) % 3; // Rotate between buzzers
-  }
-
-  Serial.println("Melody for 'Au claire de la lune' has been loaded into buzzer stacks.");
-}
-
-void playAuClaireDeLaLune(); // Call the function to load the melody
