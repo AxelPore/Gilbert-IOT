@@ -246,6 +246,50 @@ CircularStack buzzerStacks[3];
 // Function to connect to Wi-Fi
 #include <HTTPClient.h>
 
+// Function to get device MAC address as device ID
+String getDeviceID() {
+  return WiFi.macAddress();
+}
+
+// Function to pair device with Flask server
+void pairDeviceWithServer() {
+  if (WiFi.status() == WL_CONNECTED) {
+      HTTPClient http;
+      // Replace "YOUR_FLASK_SERVER_IP" with the actual IP address or domain of your Flask server
+      String serverUrl = "http://127.0.0.1:5000/pair_device";
+      http.begin(serverUrl);
+      http.addHeader("Content-Type", "application/json");
+
+      // Prepare JSON payload with device_id and user credentials
+      // For simplicity, using username and password here; in production use token-based auth
+      String username = "your_username"; // Replace with actual username or get dynamically
+      String password = "your_password"; // Replace with actual password or get dynamically
+      String deviceID = getDeviceID();
+
+      String payload = "{\"device_id\":\"" + deviceID + "\"}";
+
+      // Add basic auth header (optional, depending on server auth)
+      // String authHeader = "Basic " + base64::encode(username + ":" + password);
+      // http.addHeader("Authorization", authHeader);
+
+      int httpResponseCode = http.POST(payload);
+
+      if (httpResponseCode > 0) {
+          String response = http.getString();
+          Serial.print("Pairing response: ");
+          Serial.println(response);
+      } else {
+          Serial.print("Error on sending POST: ");
+          Serial.println(httpResponseCode);
+      }
+
+      http.end();
+  } else {
+      Serial.println("WiFi not connected, cannot pair device");
+  }
+}
+
+
 void connectToWiFi() {
     Serial.print("Connecting to Wi-Fi...");
     WiFi.begin(ssid, password);
@@ -261,48 +305,8 @@ void connectToWiFi() {
     pairDeviceWithServer();
 }
 
-// Function to get device MAC address as device ID
-String getDeviceID() {
-    return WiFi.macAddress();
-}
 
-// Function to pair device with Flask server
-void pairDeviceWithServer() {
-    if (WiFi.status() == WL_CONNECTED) {
-        HTTPClient http;
-        // Replace "YOUR_FLASK_SERVER_IP" with the actual IP address or domain of your Flask server
-        String serverUrl = "http://127.0.0.1:5000/pair_device";
-        http.begin(serverUrl);
-        http.addHeader("Content-Type", "application/json");
 
-        // Prepare JSON payload with device_id and user credentials
-        // For simplicity, using username and password here; in production use token-based auth
-        String username = "your_username"; // Replace with actual username or get dynamically
-        String password = "your_password"; // Replace with actual password or get dynamically
-        String deviceID = getDeviceID();
-
-        String payload = "{\"device_id\":\"" + deviceID + "\"}";
-
-        // Add basic auth header (optional, depending on server auth)
-        // String authHeader = "Basic " + base64::encode(username + ":" + password);
-        // http.addHeader("Authorization", authHeader);
-
-        int httpResponseCode = http.POST(payload);
-
-        if (httpResponseCode > 0) {
-            String response = http.getString();
-            Serial.print("Pairing response: ");
-            Serial.println(response);
-        } else {
-            Serial.print("Error on sending POST: ");
-            Serial.println(httpResponseCode);
-        }
-
-        http.end();
-    } else {
-        Serial.println("WiFi not connected, cannot pair device");
-    }
-}
 
 // Function to connect to MQTT broker
 void connectToMQTT() {
